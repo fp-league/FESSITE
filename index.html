@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FES — Driver Rankings</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0C10;
+    --bg-raised: #12151C;
+    --bg-card: #171B24;
+    --line: #232833;
+    --text: #E9ECF2;
+    --text-dim: #8B93A3;
+    --accent: #E8344A;
+    --accent-dim: #7A1B27;
+
+    --tier-4: #E8C468;   /* Rank IV - gold */
+    --tier-3: #C7CDD6;   /* Rank III - silver */
+    --tier-2: #C58B4E;   /* Rank II - bronze */
+    --tier-1: #6C93B8;   /* Rank I - steel blue */
+    --tier-0: #4A5162;   /* No Rank - slate */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection { background: var(--accent); color: white; }
+
+  a { color: inherit; }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- NAV ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(10,12,16,0.85);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: 0.5px; }
+  .brand span { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--text-dim); }
+  .nav-links a:hover { color: var(--text); }
+
+  /* ---------- HERO ---------- */
+  header.hero {
+    padding: 72px 0 48px;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(ellipse 900px 400px at 15% -10%, rgba(232,52,74,0.14), transparent 60%);
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); }
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900; font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.05; letter-spacing: -0.5px; max-width: 760px;
+  }
+  .hero p.sub { color: var(--text-dim); font-size: 16px; margin-top: 18px; max-width: 560px; line-height: 1.6; }
+
+  .stat-row { display: flex; gap: 40px; margin-top: 40px; flex-wrap: wrap; }
+  .stat .num {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    font-size: 32px; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  /* ---------- CONTROLS ---------- */
+  .controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 28px 0; border-bottom: 1px solid var(--line);
+  }
+  .search {
+    flex: 1; min-width: 200px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  .search:focus { outline: none; border-color: var(--accent); }
+  .chip {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+    padding: 9px 16px; border-radius: 999px; font-size: 13px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { color: var(--text); border-color: #3a4150; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* ---------- TABLE ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 32px 0 80px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); font-weight: 500; padding: 0 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  thead th.num-col, tbody td.num-col { text-align: right; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--line);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: var(--bg-card); }
+  tbody td { padding: 16px; font-size: 14px; }
+
+  .pos {
+    font-family: 'JetBrains Mono', monospace; color: var(--text-dim); font-size: 13px;
+    width: 40px;
+  }
+  .driver-name { font-weight: 600; }
+  .nation { color: var(--text-dim); font-size: 13px; }
+  .division-tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim);
+    background: var(--bg-raised); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line);
+  }
+
+  .license-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 4px 10px 4px 8px; border-radius: 4px; letter-spacing: 0.5px;
+    position: relative; overflow: hidden; color: #0A0C10;
+  }
+  .license-badge::before {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(135deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 9px);
+  }
+  .license-badge.t4 { background: var(--tier-4); }
+  .license-badge.t3 { background: var(--tier-3); }
+  .license-badge.t2 { background: var(--tier-2); }
+  .license-badge.t1 { background: var(--tier-1); color: #0A0C10; }
+  .license-badge.t0 { background: var(--tier-0); color: #C7CDD6; }
+
+  .points {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+  .points.flash { animation: flashUp 1.2s ease; }
+  @keyframes flashUp {
+    0% { color: #6EE7A8; text-shadow: 0 0 12px rgba(110,231,168,0.6); }
+    100% { color: var(--text); text-shadow: none; }
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 28px 0; color: var(--text-dim); font-size: 13px;
+  }
+
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    thead th.nation-col, tbody td.nation-col { display: none; }
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tbody tr { padding: 14px 16px; }
+    tbody td { padding: 4px 0; border: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .points.flash { animation: none; }
+  }
+
+  /* ---------- ADMIN ---------- */
+  #admin-link.active { color: var(--accent); }
+  .admin-banner {
+    background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--text); font-size: 13px; padding: 10px 16px; border-radius: 8px;
+    margin-top: 20px; display: flex; align-items: center; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .admin-banner button {
+    background: none; border: 1px solid var(--accent); color: var(--text);
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .edit-col { width: 40px; }
+  .edit-btn {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+    width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .edit-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 28px; width: 100%; max-width: 400px;
+  }
+  .modal-title {
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 17px; margin-bottom: 20px;
+  }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 12px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; color: var(--text); font-family: inherit; font-size: 14px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .modal-error { color: var(--accent); font-size: 13px; margin-bottom: 8px; min-height: 18px; }
+  .modal-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .btn-primary {
+    background: var(--accent); border: none; color: white; padding: 10px 18px;
+    border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .btn-primary:hover { background: #d12a3f; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    padding: 10px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: #3a4150; }
+  #modal-delete { border-color: var(--accent-dim); color: var(--accent); }
+  #modal-delete:hover { border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <div class="brand">FES <span>RANKINGS</span></div>
+    <div class="nav-links">
+      <a href="#rankings">Rankings</a>
+      <a href="#" id="refresh-link">Refresh</a>
+      <a href="#" id="admin-link">Admin</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Live Standings</div>
+    <h1>Every driver.<br>Every rank.<br>One grid.</h1>
+    <p class="sub">The full FES license and points database — updated after every race weekend.</p>
+    <div class="stat-row">
+      <div class="stat">
+        <div class="num" id="stat-drivers">—</div>
+        <div class="label">Registered Drivers</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-divisions">—</div>
+        <div class="label">Active Divisions</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="stat-top">—</div>
+        <div class="label">Top Score</div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<div class="wrap" id="rankings">
+  <div class="controls">
+    <input class="search" id="search" type="text" placeholder="Search driver or nation...">
+    <button class="chip active" data-division="all">All</button>
+    <!-- division chips injected here -->
+    <span id="division-chips"></span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th>Driver</th>
+        <th class="nation-col">Nation</th>
+        <th>Division</th>
+        <th>License</th>
+        <th class="num-col">Points</th>
+        <th id="edit-col-header" class="edit-col" style="display:none"></th>
+      </tr>
+    </thead>
+    <tbody id="driver-rows">
+      <!-- rows injected here -->
+    </tbody>
+  </table>
+</div>
+
+<footer>
+  <div class="wrap">FES — Driver Rankings. Data synced from the FES registration system.</div>
+</footer>
+
+<div id="modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div id="modal-title" class="modal-title">Edit driver</div>
+    <div class="field">
+      <label>Driver name</label>
+      <input id="f-name" type="text">
+    </div>
+    <div class="field">
+      <label>Nation</label>
+      <input id="f-nation" type="text">
+    </div>
+    <div class="field">
+      <label>Division</label>
+      <input id="f-division" type="text">
+    </div>
+    <div class="field">
+      <label>License level</label>
+      <select id="f-license">
+        <option value="">Auto (based on points)</option>
+        <option value="No Rank">No Rank</option>
+        <option value="Rank I">Rank I</option>
+        <option value="Rank II">Rank II</option>
+        <option value="Rank III">Rank III</option>
+        <option value="Rank IV">Rank IV</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Points</label>
+      <input id="f-points" type="number">
+    </div>
+    <div id="modal-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <button class="btn-ghost" id="modal-delete">Delete driver</button>
+      <div style="flex:1"></div>
+      <button class="btn-ghost" id="modal-cancel">Cancel</button>
+      <button class="btn-primary" id="modal-save">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<div id="admin-login-overlay" class="modal-overlay" style="display:none">
+  <div class="modal">
+    <div class="modal-title">Admin access</div>
+    <div class="field">
+      <label>Admin key</label>
+      <input id="admin-key-input" type="password" placeholder="Enter the admin key">
+    </div>
+    <div id="admin-login-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <div style="flex:1"></div>
+      <button class="btn-ghost" id="admin-login-cancel">Cancel</button>
+      <button class="btn-primary" id="admin-login-submit">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---- CONFIG ----
+  // Point this at your deployed Worker, e.g. 'https://fes-driver-bot.<you>.workers.dev'
+  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev';
+  const POLL_INTERVAL_MS = 30000;
+
+  let drivers = [];
+  let previousPoints = {};
+  let activeDivision = 'all';
+  let searchTerm = '';
+  let adminKey = localStorage.getItem('fes_admin_key') || null;
+  let editingDriverId = null;
+
+  const licenseTierClass = (level) => {
+    if (level === 'Rank IV') return 't4';
+    if (level === 'Rank III') return 't3';
+    if (level === 'Rank II') return 't2';
+    if (level === 'Rank I') return 't1';
+    return 't0';
+  };
+
+  const demoData = [
+    { discord_id: '1', driver_name: 'DGK Survival', nation: 'Australia', division: 'No Division', license_level: 'Rank IV', points: 1250 },
+    { discord_id: '2', driver_name: 'Jackplays', nation: 'United Kingdom', division: 'No Division', license_level: 'Rank IV', points: 1150 },
+    { discord_id: '3', driver_name: 'Tupinhi', nation: 'Brazil', division: 'F2', license_level: 'Rank IV', points: 750 },
+    { discord_id: '4', driver_name: 'Mazen', nation: 'Palestine State', division: 'No Division', license_level: 'Rank III', points: 650 },
+    { discord_id: '5', driver_name: 'Chris', nation: 'United States of America', division: 'F2', license_level: 'Rank II', points: 450 },
+    { discord_id: '6', driver_name: 'Kuchenko', nation: 'Poland', division: 'No Division', license_level: 'Rank I', points: 250 },
+    { discord_id: '7', driver_name: 'Aaron', nation: 'Spain', division: 'No Division', license_level: 'No Rank', points: 0 },
+  ];
+
+  async function fetchDrivers() {
+    try {
+      const res = await fetch(`${API_BASE}/api/drivers`);
+      if (!res.ok) throw new Error('bad response');
+      const data = await res.json();
+      applyData(data);
+    } catch (err) {
+      // Fallback to demo data if the API isn't reachable yet (e.g. still deploying)
+      if (drivers.length === 0) applyData(demoData);
+      console.warn('Using demo data — could not reach API:', err.message);
+    }
+  }
+
+  function applyData(data) {
+    previousPoints = Object.fromEntries(drivers.map(d => [d.discord_id, d.points]));
+    drivers = data;
+    renderDivisionChips();
+    renderStats();
+    renderRows();
+  }
+
+  function renderStats() {
+    document.getElementById('stat-drivers').textContent = drivers.length;
+    const divisions = new Set(drivers.map(d => d.division).filter(d => d && d !== 'No Division'));
+    document.getElementById('stat-divisions').textContent = divisions.size;
+    const top = drivers.reduce((max, d) => Math.max(max, d.points), 0);
+    document.getElementById('stat-top').textContent = top.toLocaleString();
+  }
+
+  function renderDivisionChips() {
+    const container = document.getElementById('division-chips');
+    const divisions = [...new Set(drivers.map(d => d.division))].filter(Boolean);
+    container.innerHTML = divisions.map(div =>
+      `<button class="chip" data-division="${div}">${div}</button>`
+    ).join('');
+    attachChipListeners();
+  }
+
+  function attachChipListeners() {
+    document.querySelectorAll('.chip').forEach(chip => {
+      chip.onclick = () => {
+        activeDivision = chip.dataset.division;
+        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+        chip.classList.add('active');
+        renderRows();
+      };
+    });
+  }
+
+  function renderRows() {
+    const tbody = document.getElementById('driver-rows');
+    let filtered = drivers.filter(d => activeDivision === 'all' || d.division === activeDivision);
+    if (searchTerm) {
+      const q = searchTerm.toLowerCase();
+      filtered = filtered.filter(d =>
+        d.driver_name.toLowerCase().includes(q) || (d.nation || '').toLowerCase().includes(q)
+      );
+    }
+    filtered.sort((a, b) => b.points - a.points);
+
+    if (filtered.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No drivers match. Try a different search or division.</div></td></tr>`;
+      return;
+    }
+
+    tbody.innerHTML = filtered.map((d, i) => {
+      const tier = licenseTierClass(d.license_level);
+      const changed = previousPoints[d.discord_id] !== undefined && previousPoints[d.discord_id] !== d.points;
+      const editCell = adminKey
+        ? `<td class="edit-col"><button class="edit-btn" data-id="${d.discord_id}" title="Edit driver">✎</button></td>`
+        : '';
+      return `
+        <tr>
+          <td class="pos">${i + 1}</td>
+          <td class="driver-name">${escapeHtml(d.driver_name)}</td>
+          <td class="nation nation-col">${escapeHtml(d.nation || 'Unknown')}</td>
+          <td><span class="division-tag">${escapeHtml(d.division || 'No Division')}</span></td>
+          <td><span class="license-badge ${tier}">${d.license_level}</span></td>
+          <td class="num-col points ${changed ? 'flash' : ''}">${d.points.toLocaleString()}</td>
+          ${editCell}
+        </tr>
+      `;
+    }).join('');
+
+    document.getElementById('edit-col-header').style.display = adminKey ? '' : 'none';
+
+    if (adminKey) {
+      tbody.querySelectorAll('.edit-btn').forEach(btn => {
+        btn.onclick = () => openEditModal(btn.dataset.id);
+      });
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  document.getElementById('search').addEventListener('input', (e) => {
+    searchTerm = e.target.value;
+    renderRows();
+  });
+
+  document.getElementById('refresh-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    fetchDrivers();
+  });
+
+  // ---- ADMIN MODE ----
+  function updateAdminUI() {
+    const link = document.getElementById('admin-link');
+    link.textContent = adminKey ? 'Admin: On (click to log out)' : 'Admin';
+    link.classList.toggle('active', !!adminKey);
+    renderRows();
+  }
+
+  document.getElementById('admin-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    if (adminKey) {
+      adminKey = null;
+      localStorage.removeItem('fes_admin_key');
+      updateAdminUI();
+    } else {
+      document.getElementById('admin-key-input').value = '';
+      document.getElementById('admin-login-error').textContent = '';
+      document.getElementById('admin-login-overlay').style.display = 'flex';
+    }
+  });
+
+  document.getElementById('admin-login-cancel').addEventListener('click', () => {
+    document.getElementById('admin-login-overlay').style.display = 'none';
+  });
+
+  document.getElementById('admin-login-submit').addEventListener('click', async () => {
+    const key = document.getElementById('admin-key-input').value.trim();
+    if (!key) return;
+    // Validate by attempting a harmless call — update on a bogus id just to check auth
+    const res = await fetch(`${API_BASE}/api/admin/update`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-admin-key': key },
+      body: JSON.stringify({ discord_id: '__auth_check__' }),
+    });
+    if (res.status === 401) {
+      document.getElementById('admin-login-error').textContent = 'Incorrect admin key.';
+      return;
+    }
+    adminKey = key;
+    localStorage.setItem('fes_admin_key', key);
+    document.getElementById('admin-login-overlay').style.display = 'none';
+    updateAdminUI();
+  });
+
+  // ---- EDIT MODAL ----
+  function openEditModal(discordId) {
+    const driver = drivers.find(d => d.discord_id === discordId);
+    if (!driver) return;
+    editingDriverId = discordId;
+    document.getElementById('modal-title').textContent = `Edit ${driver.driver_name}`;
+    document.getElementById('f-name').value = driver.driver_name || '';
+    document.getElementById('f-nation').value = driver.nation || '';
+    document.getElementById('f-division').value = driver.division || '';
+    document.getElementById('f-license').value = ''; // default to auto unless they change it
+    document.getElementById('f-points').value = driver.points;
+    document.getElementById('modal-error').textContent = '';
+    document.getElementById('modal-overlay').style.display = 'flex';
+  }
+
+  document.getElementById('modal-cancel').addEventListener('click', () => {
+    document.getElementById('modal-overlay').style.display = 'none';
+  });
+
+  document.getElementById('modal-save').addEventListener('click', async () => {
+    const errorEl = document.getElementById('modal-error');
+    errorEl.textContent = '';
+    const payload = {
+      discord_id: editingDriverId,
+      driver_name: document.getElementById('f-name').value.trim(),
+      nation: document.getElementById('f-nation').value.trim(),
+      division: document.getElementById('f-division').value.trim(),
+      points: Number(document.getElementById('f-points').value),
+    };
+    const licenseOverride = document.getElementById('f-license').value;
+    if (licenseOverride) payload.license_level = licenseOverride;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Update failed');
+      document.getElementById('modal-overlay').style.display = 'none';
+      await fetchDrivers();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+
+  document.getElementById('modal-delete').addEventListener('click', async () => {
+    const driver = drivers.find(d => d.discord_id === editingDriverId);
+    if (!driver) return;
+    if (!confirm(`Remove ${driver.driver_name} from the database? This can't be undone.`)) return;
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ discord_id: editingDriverId }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      document.getElementById('modal-overlay').style.display = 'none';
+      await fetchDrivers();
+    } catch (err) {
+      document.getElementById('modal-error').textContent = err.message;
+    }
+  });
+
+  updateAdminUI();
+  fetchDrivers();
+  setInterval(fetchDrivers, POLL_INTERVAL_MS);
+</script>
+
+</body>
+</html>
