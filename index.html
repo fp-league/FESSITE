@@ -128,6 +128,7 @@
     width: 40px;
   }
   .driver-name { font-weight: 600; }
+  .flag { margin-right: 2px; }
   .nation { color: var(--text-dim); font-size: 13px; }
   .division-tag {
     font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim);
@@ -285,17 +286,27 @@
   }
 
   .division-row {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; gap: 8px;
     background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   }
-  .division-row input[type="text"] {
-    flex: 1; background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+  .division-row-top { display: flex; align-items: center; gap: 10px; }
+  .division-row input[type="text"], .division-row input[type="color"] {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
     padding: 6px 8px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .division-row .division-name-input { flex: 1.4; min-width: 0; }
+  .division-row .division-icon-input { width: 50px; flex-shrink: 0; }
+  .division-row .division-role-input { width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .division-row input[type="color"] {
+    width: 30px; height: 30px; padding: 0; cursor: pointer; flex-shrink: 0;
   }
   .division-form-grid { display: flex; gap: 8px; }
   .division-form-grid input[type="text"] {
     flex: 1; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
     padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .division-form-grid input[type="color"] {
+    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; flex-shrink: 0;
   }
 </style>
 </head>
@@ -364,7 +375,10 @@
 </div>
 
 <footer>
-  <div class="wrap">FES — Driver Rankings. Data synced from the FES registration system.</div>
+  <div class="wrap">
+    FES — Driver Rankings. Data synced from the FES registration system.
+    <span id="footer-nation-count" style="margin-left:10px;color:var(--accent-light,var(--accent));"></span>
+  </div>
 </footer>
 
 <div id="modal-overlay" class="modal-overlay" style="display:none">
@@ -376,7 +390,7 @@
     </div>
     <div class="field">
       <label>Nation</label>
-      <input id="f-nation" type="text">
+      <select id="f-nation"></select>
     </div>
     <div class="field">
       <label>Division</label>
@@ -447,16 +461,19 @@
 </div>
 
 <div id="divisions-modal-overlay" class="modal-overlay" style="display:none">
-  <div class="modal" style="max-width:440px">
+  <div class="modal" style="max-width:480px">
     <div class="modal-title">Manage divisions</div>
     <div id="divisions-list" class="ranks-list"><!-- existing divisions injected here --></div>
 
     <div class="rank-add-form">
       <div class="rank-add-title">Add a new division</div>
       <div class="division-form-grid">
+        <input id="new-division-color" type="color" value="#A855F7" title="Badge color">
+        <input id="new-division-icon" type="text" placeholder="Icon (emoji)" maxlength="4" style="width:70px">
         <input id="new-division-name" type="text" placeholder="Division name (e.g. F1)">
-        <button class="btn-primary" id="add-division-btn">Add</button>
       </div>
+      <input id="new-division-role" type="text" placeholder="Discord role ID (optional, for auto-sync)" style="width:100%;margin-top:8px;background:var(--bg-raised);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:inherit;">
+      <button class="btn-primary" id="add-division-btn" style="margin-top:10px">Add division</button>
     </div>
 
     <div id="divisions-error" class="modal-error"></div>
@@ -581,7 +598,7 @@
 
   // ---- CONFIG ----
   // Point this at your deployed Worker, e.g. 'https://fes-driver-bot.<you>.workers.dev'
-  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev';
+  const API_BASE = 'https://fes-driver-bot.YOURNAME.workers.dev';
   const POLL_INTERVAL_MS = 30000;
 
   let drivers = [];
@@ -654,13 +671,274 @@
     });
   }
 
-  let divisions = []; // [{name, sort_order}], fetched from /api/divisions
+  // Full country list with ISO codes, used to render flag emoji + populate
+  // the admin nation dropdown. Flags are computed from the code, not stored.
+  const COUNTRIES = [
+    ["Afghanistan","AF"],
+    ["Albania","AL"],
+    ["Algeria","DZ"],
+    ["American Samoa","AS"],
+    ["Andorra","AD"],
+    ["Angola","AO"],
+    ["Anguilla","AI"],
+    ["Antarctica","AQ"],
+    ["Antigua and Barbuda","AG"],
+    ["Argentina","AR"],
+    ["Armenia","AM"],
+    ["Aruba","AW"],
+    ["Australia","AU"],
+    ["Austria","AT"],
+    ["Azerbaijan","AZ"],
+    ["Bahamas","BS"],
+    ["Bahrain","BH"],
+    ["Bangladesh","BD"],
+    ["Barbados","BB"],
+    ["Belarus","BY"],
+    ["Belgium","BE"],
+    ["Belize","BZ"],
+    ["Benin","BJ"],
+    ["Bermuda","BM"],
+    ["Bhutan","BT"],
+    ["Bolivia, Plurinational State of","BO"],
+    ["Bonaire, Sint Eustatius and Saba","BQ"],
+    ["Bosnia and Herzegovina","BA"],
+    ["Botswana","BW"],
+    ["Bouvet Island","BV"],
+    ["Brazil","BR"],
+    ["British Indian Ocean Territory","IO"],
+    ["Brunei Darussalam","BN"],
+    ["Bulgaria","BG"],
+    ["Burkina Faso","BF"],
+    ["Burundi","BI"],
+    ["Cabo Verde","CV"],
+    ["Cambodia","KH"],
+    ["Cameroon","CM"],
+    ["Canada","CA"],
+    ["Cayman Islands","KY"],
+    ["Central African Republic","CF"],
+    ["Chad","TD"],
+    ["Chile","CL"],
+    ["China","CN"],
+    ["Christmas Island","CX"],
+    ["Cocos (Keeling) Islands","CC"],
+    ["Colombia","CO"],
+    ["Comoros","KM"],
+    ["Congo","CG"],
+    ["Congo, The Democratic Republic of the","CD"],
+    ["Cook Islands","CK"],
+    ["Costa Rica","CR"],
+    ["Croatia","HR"],
+    ["Cuba","CU"],
+    ["Curaçao","CW"],
+    ["Cyprus","CY"],
+    ["Czechia","CZ"],
+    ["Côte d'Ivoire","CI"],
+    ["Denmark","DK"],
+    ["Djibouti","DJ"],
+    ["Dominica","DM"],
+    ["Dominican Republic","DO"],
+    ["Ecuador","EC"],
+    ["Egypt","EG"],
+    ["El Salvador","SV"],
+    ["Equatorial Guinea","GQ"],
+    ["Eritrea","ER"],
+    ["Estonia","EE"],
+    ["Eswatini","SZ"],
+    ["Ethiopia","ET"],
+    ["Falkland Islands (Malvinas)","FK"],
+    ["Faroe Islands","FO"],
+    ["Fiji","FJ"],
+    ["Finland","FI"],
+    ["France","FR"],
+    ["French Guiana","GF"],
+    ["French Polynesia","PF"],
+    ["French Southern Territories","TF"],
+    ["Gabon","GA"],
+    ["Gambia","GM"],
+    ["Georgia","GE"],
+    ["Germany","DE"],
+    ["Ghana","GH"],
+    ["Gibraltar","GI"],
+    ["Greece","GR"],
+    ["Greenland","GL"],
+    ["Grenada","GD"],
+    ["Guadeloupe","GP"],
+    ["Guam","GU"],
+    ["Guatemala","GT"],
+    ["Guernsey","GG"],
+    ["Guinea","GN"],
+    ["Guinea-Bissau","GW"],
+    ["Guyana","GY"],
+    ["Haiti","HT"],
+    ["Heard Island and McDonald Islands","HM"],
+    ["Holy See (Vatican City State)","VA"],
+    ["Honduras","HN"],
+    ["Hong Kong","HK"],
+    ["Hungary","HU"],
+    ["Iceland","IS"],
+    ["India","IN"],
+    ["Indonesia","ID"],
+    ["Iran, Islamic Republic of","IR"],
+    ["Iraq","IQ"],
+    ["Ireland","IE"],
+    ["Isle of Man","IM"],
+    ["Israel","IL"],
+    ["Italy","IT"],
+    ["Jamaica","JM"],
+    ["Japan","JP"],
+    ["Jersey","JE"],
+    ["Jordan","JO"],
+    ["Kazakhstan","KZ"],
+    ["Kenya","KE"],
+    ["Kiribati","KI"],
+    ["Korea, Democratic People's Republic of","KP"],
+    ["Korea, Republic of","KR"],
+    ["Kuwait","KW"],
+    ["Kyrgyzstan","KG"],
+    ["Lao People's Democratic Republic","LA"],
+    ["Latvia","LV"],
+    ["Lebanon","LB"],
+    ["Lesotho","LS"],
+    ["Liberia","LR"],
+    ["Libya","LY"],
+    ["Liechtenstein","LI"],
+    ["Lithuania","LT"],
+    ["Luxembourg","LU"],
+    ["Macao","MO"],
+    ["Madagascar","MG"],
+    ["Malawi","MW"],
+    ["Malaysia","MY"],
+    ["Maldives","MV"],
+    ["Mali","ML"],
+    ["Malta","MT"],
+    ["Marshall Islands","MH"],
+    ["Martinique","MQ"],
+    ["Mauritania","MR"],
+    ["Mauritius","MU"],
+    ["Mayotte","YT"],
+    ["Mexico","MX"],
+    ["Micronesia, Federated States of","FM"],
+    ["Moldova, Republic of","MD"],
+    ["Monaco","MC"],
+    ["Mongolia","MN"],
+    ["Montenegro","ME"],
+    ["Montserrat","MS"],
+    ["Morocco","MA"],
+    ["Mozambique","MZ"],
+    ["Myanmar","MM"],
+    ["Namibia","NA"],
+    ["Nauru","NR"],
+    ["Nepal","NP"],
+    ["Netherlands","NL"],
+    ["New Caledonia","NC"],
+    ["New Zealand","NZ"],
+    ["Nicaragua","NI"],
+    ["Niger","NE"],
+    ["Nigeria","NG"],
+    ["Niue","NU"],
+    ["Norfolk Island","NF"],
+    ["North Macedonia","MK"],
+    ["Northern Mariana Islands","MP"],
+    ["Norway","NO"],
+    ["Oman","OM"],
+    ["Pakistan","PK"],
+    ["Palau","PW"],
+    ["Palestine, State of","PS"],
+    ["Panama","PA"],
+    ["Papua New Guinea","PG"],
+    ["Paraguay","PY"],
+    ["Peru","PE"],
+    ["Philippines","PH"],
+    ["Pitcairn","PN"],
+    ["Poland","PL"],
+    ["Portugal","PT"],
+    ["Puerto Rico","PR"],
+    ["Qatar","QA"],
+    ["Romania","RO"],
+    ["Russian Federation","RU"],
+    ["Rwanda","RW"],
+    ["Réunion","RE"],
+    ["Saint Barthélemy","BL"],
+    ["Saint Helena, Ascension and Tristan da Cunha","SH"],
+    ["Saint Kitts and Nevis","KN"],
+    ["Saint Lucia","LC"],
+    ["Saint Martin (French part)","MF"],
+    ["Saint Pierre and Miquelon","PM"],
+    ["Saint Vincent and the Grenadines","VC"],
+    ["Samoa","WS"],
+    ["San Marino","SM"],
+    ["Sao Tome and Principe","ST"],
+    ["Saudi Arabia","SA"],
+    ["Senegal","SN"],
+    ["Serbia","RS"],
+    ["Seychelles","SC"],
+    ["Sierra Leone","SL"],
+    ["Singapore","SG"],
+    ["Sint Maarten (Dutch part)","SX"],
+    ["Slovakia","SK"],
+    ["Slovenia","SI"],
+    ["Solomon Islands","SB"],
+    ["Somalia","SO"],
+    ["South Africa","ZA"],
+    ["South Georgia and the South Sandwich Islands","GS"],
+    ["South Sudan","SS"],
+    ["Spain","ES"],
+    ["Sri Lanka","LK"],
+    ["Sudan","SD"],
+    ["Suriname","SR"],
+    ["Svalbard and Jan Mayen","SJ"],
+    ["Sweden","SE"],
+    ["Switzerland","CH"],
+    ["Syrian Arab Republic","SY"],
+    ["Taiwan, Province of China","TW"],
+    ["Tajikistan","TJ"],
+    ["Tanzania, United Republic of","TZ"],
+    ["Thailand","TH"],
+    ["Timor-Leste","TL"],
+    ["Togo","TG"],
+    ["Tokelau","TK"],
+    ["Tonga","TO"],
+    ["Trinidad and Tobago","TT"],
+    ["Tunisia","TN"],
+    ["Turkmenistan","TM"],
+    ["Turks and Caicos Islands","TC"],
+    ["Tuvalu","TV"],
+    ["Türkiye","TR"],
+    ["Uganda","UG"],
+    ["Ukraine","UA"],
+    ["United Arab Emirates","AE"],
+    ["United Kingdom","GB"],
+    ["United States","US"],
+    ["United States Minor Outlying Islands","UM"],
+    ["Uruguay","UY"],
+    ["Uzbekistan","UZ"],
+    ["Vanuatu","VU"],
+    ["Venezuela, Bolivarian Republic of","VE"],
+    ["Viet Nam","VN"],
+    ["Virgin Islands, British","VG"],
+    ["Virgin Islands, U.S.","VI"],
+    ["Wallis and Futuna","WF"],
+    ["Western Sahara","EH"],
+    ["Yemen","YE"],
+    ["Zambia","ZM"],
+    ["Zimbabwe","ZW"],
+    ["Åland Islands","AX"]
+  ];
+
+  function flagForCountry(name) {
+    const entry = COUNTRIES.find(c => c[0] === name);
+    if (!entry) return '';
+    const code = entry[1];
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+  }
+
+  let divisions = []; // [{name, color, icon, sort_order}], fetched from /api/divisions
   const demoDivisions = [
-    { name: 'No Division', sort_order: 0 },
-    { name: 'F1', sort_order: 1 },
-    { name: 'F2', sort_order: 2 },
-    { name: 'F3', sort_order: 3 },
-    { name: 'F4', sort_order: 4 },
+    { name: 'No Division', color: '#4A4162', icon: '', sort_order: 0 },
+    { name: 'F1', color: '#A855F7', icon: '🏎️', sort_order: 1 },
+    { name: 'F2', color: '#8B7FE8', icon: '🏎️', sort_order: 2 },
+    { name: 'F3', color: '#6C93B8', icon: '🏎️', sort_order: 3 },
+    { name: 'F4', color: '#4A5162', icon: '🏎️', sort_order: 4 },
   ];
 
   async function fetchDivisions() {
@@ -683,7 +961,23 @@
     divisions.forEach(d => {
       const opt = document.createElement('option');
       opt.value = d.name;
-      opt.textContent = d.name;
+      opt.textContent = `${d.icon ? d.icon + ' ' : ''}${d.name}`;
+      select.appendChild(opt);
+    });
+  }
+
+  function colorForDivision(divisionName) {
+    const d = divisions.find(x => x.name === divisionName);
+    return d?.color || '#4A5162';
+  }
+
+  function populateNationSelect() {
+    const select = document.getElementById('f-nation');
+    select.innerHTML = '<option value="Unknown">Unknown</option>';
+    COUNTRIES.forEach(([name, code]) => {
+      const opt = document.createElement('option');
+      opt.value = name;
+      opt.textContent = `${flagForCountry(name)} ${name}`;
       select.appendChild(opt);
     });
   }
@@ -746,15 +1040,30 @@
         d.driver_name.toLowerCase().includes(q) || (d.nation || '').toLowerCase().includes(q)
       );
     }
-    filtered.sort((a, b) => b.points - a.points);
+
+    // Priority: Rank (higher first) -> Division (by managed order) -> Points (higher first) -> Alphabetical
+    const rankThreshold = (name) => ranks.find(r => r.name === name)?.threshold ?? -1;
+    const divisionOrder = (name) => divisions.find(d => d.name === name)?.sort_order ?? 999;
+    filtered.sort((a, b) => {
+      const rankDiff = rankThreshold(b.license_level) - rankThreshold(a.license_level);
+      if (rankDiff !== 0) return rankDiff;
+      const divDiff = divisionOrder(a.division) - divisionOrder(b.division);
+      if (divDiff !== 0) return divDiff;
+      const pointsDiff = b.points - a.points;
+      if (pointsDiff !== 0) return pointsDiff;
+      return a.driver_name.localeCompare(b.driver_name);
+    });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No drivers match. Try a different search or division.</div></td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">No drivers match. Try a different search or division.</div></td></tr>`;
       return;
     }
 
     tbody.innerHTML = filtered.map((d, i) => {
       const badgeColor = colorForRank(d.license_level);
+      const divColor = colorForDivision(d.division);
+      const divIcon = divisions.find(x => x.name === d.division)?.icon || '';
+      const flag = flagForCountry(d.nation);
       const changed = previousPoints[d.discord_id] !== undefined && previousPoints[d.discord_id] !== d.points;
       const editCell = adminKey
         ? `<td class="edit-col"><button class="edit-btn" data-id="${d.discord_id}" title="Edit driver">✎</button></td>`
@@ -762,9 +1071,9 @@
       return `
         <tr>
           <td class="pos">${i + 1}</td>
-          <td class="driver-name">${escapeHtml(d.driver_name)}</td>
+          <td class="driver-name">${flag ? `<span class="flag">${flag}</span> ` : ''}${escapeHtml(d.driver_name)}</td>
           <td class="nation nation-col">${escapeHtml(d.nation || 'Unknown')}</td>
-          <td><span class="division-tag">${escapeHtml(d.division || 'No Division')}</span></td>
+          <td><span class="division-tag" style="border-color:${divColor};color:${divColor}">${divIcon ? divIcon + ' ' : ''}${escapeHtml(d.division || 'No Division')}</span></td>
           <td><span class="license-badge" style="background:${badgeColor};color:${textColorForBg(badgeColor)}">${escapeHtml(d.license_level)}</span></td>
           <td class="num-col points ${changed ? 'flash' : ''}">${d.points.toLocaleString()}</td>
           ${editCell}
@@ -779,6 +1088,15 @@
         btn.onclick = () => openEditModal(btn.dataset.id);
       });
     }
+
+    updateFooterStats();
+  }
+
+  function updateFooterStats() {
+    const el = document.getElementById('footer-nation-count');
+    if (!el) return;
+    const distinctNations = new Set(drivers.map(d => d.nation).filter(n => n && n !== 'Unknown'));
+    el.textContent = `${distinctNations.size} nation${distinctNations.size === 1 ? '' : 's'} represented`;
   }
 
   function escapeHtml(str) {
@@ -848,7 +1166,17 @@
     editingDriverId = discordId;
     document.getElementById('modal-title').textContent = `Edit ${driver.driver_name}`;
     document.getElementById('f-name').value = driver.driver_name || '';
-    document.getElementById('f-nation').value = driver.nation || '';
+
+    populateNationSelect();
+    const nationSelect = document.getElementById('f-nation');
+    if (driver.nation && ![...nationSelect.options].some(o => o.value === driver.nation)) {
+      const opt = document.createElement('option');
+      opt.value = driver.nation;
+      opt.textContent = `${driver.nation} (not in list)`;
+      nationSelect.appendChild(opt);
+    }
+    nationSelect.value = driver.nation || 'Unknown';
+
     populateDivisionSelect();
     const divisionSelect = document.getElementById('f-division');
     if (driver.division && ![...divisionSelect.options].some(o => o.value === driver.division)) {
@@ -1056,27 +1384,49 @@
   });
 
   // ---- MANAGE DIVISIONS PANEL ----
-  document.getElementById('manage-divisions-link').addEventListener('click', (e) => {
+  let adminDivisions = []; // full division data including role_id, admin-only
+
+  document.getElementById('manage-divisions-link').addEventListener('click', async (e) => {
     e.preventDefault();
-    renderDivisionsPanel();
     document.getElementById('divisions-error').textContent = '';
     document.getElementById('divisions-modal-overlay').style.display = 'flex';
+    await loadAdminDivisionsAndRender();
   });
 
   document.getElementById('divisions-modal-close').addEventListener('click', () => {
     document.getElementById('divisions-modal-overlay').style.display = 'none';
   });
 
+  async function loadAdminDivisionsAndRender() {
+    const errorEl = document.getElementById('divisions-error');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/divisions`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+      if (!res.ok) throw new Error('Could not load divisions — check your admin key is still valid.');
+      adminDivisions = await res.json();
+      errorEl.textContent = '';
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+    renderDivisionsPanel();
+  }
+
   function renderDivisionsPanel() {
     const list = document.getElementById('divisions-list');
-    const sorted = [...divisions].sort((a, b) => a.sort_order - b.sort_order);
-    list.innerHTML = sorted.map((d, i) => `
+    const sorted = [...adminDivisions].sort((a, b) => a.sort_order - b.sort_order);
+    list.innerHTML = sorted.map(d => `
       <div class="division-row" data-original-name="${escapeHtml(d.name)}">
-        <input type="text" class="division-name-input" value="${escapeHtml(d.name)}" placeholder="Division name">
-        <div class="rank-row-actions">
-          <button class="division-save-btn" title="Save changes">✓</button>
-          <button class="division-delete-btn" title="Delete division">✕</button>
+        <div class="division-row-top">
+          <input type="color" class="division-color-input" value="${d.color || '#A855F7'}">
+          <input type="text" class="division-icon-input" value="${escapeHtml(d.icon || '')}" placeholder="🏎️" maxlength="4">
+          <input type="text" class="division-name-input" value="${escapeHtml(d.name)}" placeholder="Division name">
+          <div class="rank-row-actions">
+            <button class="division-save-btn" title="Save changes">✓</button>
+            <button class="division-delete-btn" title="Delete division">✕</button>
+          </div>
         </div>
+        <input type="text" class="division-role-input" value="${escapeHtml(d.role_id || '')}" placeholder="Discord role ID (optional, for auto-sync)">
       </div>
     `).join('');
 
@@ -1091,6 +1441,9 @@
     errorEl.textContent = '';
     const oldName = row.dataset.originalName;
     const name = row.querySelector('.division-name-input').value.trim();
+    const color = row.querySelector('.division-color-input').value;
+    const icon = row.querySelector('.division-icon-input').value.trim();
+    const role_id = row.querySelector('.division-role-input').value.trim();
 
     if (!name) {
       errorEl.textContent = 'Division needs a name.';
@@ -1101,11 +1454,11 @@
       const res = await fetch(`${API_BASE}/api/admin/divisions/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ name, old_name: oldName, sort_order: sortOrder }),
+        body: JSON.stringify({ name, color, icon: icon || null, role_id: role_id || null, old_name: oldName, sort_order: sortOrder }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+      await loadAdminDivisionsAndRender();
       await fetchDivisions();
-      renderDivisionsPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
@@ -1124,8 +1477,8 @@
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error('Delete failed');
+      await loadAdminDivisionsAndRender();
       await fetchDivisions();
-      renderDivisionsPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
@@ -1136,12 +1489,15 @@
     const errorEl = document.getElementById('divisions-error');
     errorEl.textContent = '';
     const name = document.getElementById('new-division-name').value.trim();
+    const color = document.getElementById('new-division-color').value;
+    const icon = document.getElementById('new-division-icon').value.trim();
+    const role_id = document.getElementById('new-division-role').value.trim();
 
     if (!name) {
       errorEl.textContent = 'Division needs a name.';
       return;
     }
-    if (divisions.some(d => d.name === name)) {
+    if (adminDivisions.some(d => d.name === name)) {
       errorEl.textContent = 'A division with that name already exists.';
       return;
     }
@@ -1150,12 +1506,14 @@
       const res = await fetch(`${API_BASE}/api/admin/divisions/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ name, sort_order: divisions.length }),
+        body: JSON.stringify({ name, color, icon: icon || null, role_id: role_id || null, sort_order: adminDivisions.length }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Add failed');
       document.getElementById('new-division-name').value = '';
+      document.getElementById('new-division-icon').value = '';
+      document.getElementById('new-division-role').value = '';
+      await loadAdminDivisionsAndRender();
       await fetchDivisions();
-      renderDivisionsPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
