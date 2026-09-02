@@ -318,6 +318,7 @@
     <div class="brand">FES <span>RANKINGS</span></div>
     <div class="nav-links">
       <a href="browse.html">Browse All</a>
+      <a href="history.html">Points Log</a>
       <a href="#rankings">Top Tier</a>
       <a href="#" id="refresh-link">Refresh</a>
       <a href="#" id="manage-ranks-link" style="display:none">Manage Ranks</a>
@@ -406,6 +407,10 @@
     <div class="field">
       <label>Points</label>
       <input id="f-points" type="number">
+    </div>
+    <div class="field">
+      <label>Reason for points change (optional, logged to history)</label>
+      <input id="f-reason" type="text" placeholder="e.g. Race 4 penalty">
     </div>
     <div id="modal-error" class="modal-error"></div>
     <div class="modal-actions">
@@ -596,7 +601,7 @@
 
   // ---- CONFIG ----
   // Point this at your deployed Worker, e.g. 'https://fes-driver-bot.<you>.workers.dev'
-  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev'
+  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev';
   const POLL_INTERVAL_MS = 30000;
 
   let drivers = [];
@@ -1174,6 +1179,7 @@
     divisionSelect.value = driver.division || '';
     document.getElementById('f-license').value = ''; // default to auto unless they change it
     document.getElementById('f-points').value = driver.points;
+    document.getElementById('f-reason').value = '';
     document.getElementById('modal-error').textContent = '';
     document.getElementById('modal-overlay').style.display = 'flex';
   }
@@ -1191,6 +1197,7 @@
       nation: document.getElementById('f-nation').value.trim(),
       division: document.getElementById('f-division').value.trim(),
       points: Number(document.getElementById('f-points').value),
+      reason: document.getElementById('f-reason').value.trim() || null,
     };
     const licenseOverride = document.getElementById('f-license').value;
     if (licenseOverride) payload.license_level = licenseOverride;

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>FES — Browse Drivers</title>
+<title>FES — Points History</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
@@ -311,18 +311,7 @@
   }
 
 
-  /* ---------- BROWSE PAGE EXTRAS ---------- */
-  .filters-row {
-    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
-    padding: 28px 0; border-bottom: 1px solid var(--line);
-  }
-  .filters-row select {
-    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px;
-    padding: 10px 14px; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer;
-  }
-  .filters-row select:focus { outline: none; border-color: var(--accent); }
-  .filter-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
-
+  /* ---------- HISTORY PAGE EXTRAS ---------- */
   .pagination {
     display: flex; align-items: center; justify-content: center; gap: 16px;
     padding: 28px 0 60px;
@@ -336,12 +325,20 @@
   .page-indicator {
     font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim);
   }
-
   .back-link {
     display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 13px;
     text-decoration: none; margin-bottom: 4px;
   }
   .back-link:hover { color: var(--accent); }
+  .delta-pos { color: #6EE7A8; font-weight: 700; }
+  .delta-neg { color: var(--accent); font-weight: 700; }
+  .reason-text { color: var(--text-dim); font-size: 13px; }
+  .source-tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; text-transform: uppercase;
+    color: var(--text-dim); background: var(--bg-raised); padding: 2px 6px; border-radius: 4px;
+    border: 1px solid var(--line);
+  }
+  .timestamp { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-dim); white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -352,7 +349,8 @@
     <div class="brand">FES <span>RANKINGS</span></div>
     <div class="nav-links">
       <a href="index.html">Home</a>
-      <a href="history.html">Points Log</a>
+      <a href="browse.html">Browse All</a>
+      <a href="#log">Points Log</a>
     </div>
   </div>
 </nav>
@@ -360,37 +358,26 @@
 <header class="hero" style="padding: 48px 0 32px;">
   <div class="wrap">
     <a href="index.html" class="back-link">← Back to home</a>
-    <div class="eyebrow">Full Roster</div>
-    <h1 style="font-size: clamp(28px, 4vw, 42px);">Browse every driver.</h1>
-    <p class="sub">Filter by rank, division, or country. 100 drivers per page.</p>
+    <div class="eyebrow">Full Ledger</div>
+    <h1 style="font-size: clamp(28px, 4vw, 42px);">Every point,<br>gained or lost.</h1>
+    <p class="sub">A running log of every points change across FES — race results, penalties, corrections.</p>
   </div>
 </header>
 
-<div class="wrap" id="browse">
-  <div class="filters-row">
-    <span class="filter-label">Rank</span>
-    <select id="filter-rank"><option value="all">All ranks</option></select>
-
-    <span class="filter-label">Division</span>
-    <select id="filter-division"><option value="all">All divisions</option></select>
-
-    <span class="filter-label">Country</span>
-    <select id="filter-country"><option value="all">All countries</option></select>
-  </div>
-
+<div class="wrap" id="log">
   <table>
     <thead>
       <tr>
-        <th style="width:40px">#</th>
+        <th style="width:150px">When</th>
         <th>Driver</th>
-        <th class="nation-col">Nation</th>
-        <th>Division</th>
-        <th>License</th>
-        <th class="num-col">Points</th>
+        <th class="num-col">Change</th>
+        <th class="num-col">New Total</th>
+        <th>Reason</th>
+        <th style="width:90px">Source</th>
       </tr>
     </thead>
-    <tbody id="driver-rows">
-      <tr><td colspan="6"><div class="empty-state">Loading drivers…</div></td></tr>
+    <tbody id="history-rows">
+      <tr><td colspan="6"><div class="empty-state">Loading history…</div></td></tr>
     </tbody>
   </table>
 
@@ -779,129 +766,80 @@ const COUNTRIES = [
     return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
   }
 
-  let allDrivers = [];
-  let ranks = [];
-  let divisions = [];
   let currentPage = 0;
-  let filters = { rank: 'all', division: 'all', country: 'all' };
+  let totalEntries = 0;
+  let nationByDriver = new Map(); // discord_id -> nation, for flags
 
-  function lerpText(hex) {
-    const c = hex.replace('#', '');
-    const r = parseInt(c.substring(0, 2), 16), g = parseInt(c.substring(2, 4), 16), b = parseInt(c.substring(4, 6), 16);
-    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-    return luminance > 0.55 ? '#0A0C10' : '#ECE9F5';
-  }
-
-  function colorForRank(rankName) {
-    const idx = ranks.findIndex(r => r.name === rankName);
-    if (idx === -1) return '#4A4162';
-    return ranks[idx].color || '#4A4162';
-  }
-
-  function colorForDivision(divisionName) {
-    const d = divisions.find(x => x.name === divisionName);
-    return d?.color || '#4A5162';
-  }
-
-  async function loadAll() {
+  async function loadNations() {
     try {
-      const [driversRes, ranksRes, divisionsRes] = await Promise.all([
-        fetch(`${API_BASE}/api/drivers`),
-        fetch(`${API_BASE}/api/ranks`),
-        fetch(`${API_BASE}/api/divisions`),
-      ]);
-      allDrivers = await driversRes.json();
-      ranks = await ranksRes.json();
-      divisions = await divisionsRes.json();
+      const res = await fetch(`${API_BASE}/api/drivers`);
+      if (!res.ok) return;
+      const drivers = await res.json();
+      drivers.forEach(d => nationByDriver.set(d.discord_id, d.nation));
     } catch (err) {
-      console.warn('Could not reach API:', err.message);
-      allDrivers = [];
+      // Flags are a nice-to-have; fine to skip if this fails
     }
-    ranks.sort((a, b) => a.threshold - b.threshold);
-    divisions.sort((a, b) => a.sort_order - b.sort_order);
-    populateFilters();
-    renderPage();
   }
 
-  function populateFilters() {
-    const rankSelect = document.getElementById('filter-rank');
-    ranks.forEach(r => {
-      const opt = document.createElement('option');
-      opt.value = r.name;
-      opt.textContent = r.name;
-      rankSelect.appendChild(opt);
-    });
+  async function loadPage() {
+    const tbody = document.getElementById('history-rows');
+    tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Loading history…</div></td></tr>`;
 
-    const divisionSelect = document.getElementById('filter-division');
-    divisions.forEach(d => {
-      const opt = document.createElement('option');
-      opt.value = d.name;
-      opt.textContent = `${d.icon ? d.icon + ' ' : ''}${d.name}`;
-      divisionSelect.appendChild(opt);
-    });
+    try {
+      const offset = currentPage * PAGE_SIZE;
+      const res = await fetch(`${API_BASE}/api/history?limit=${PAGE_SIZE}&offset=${offset}`);
+      if (!res.ok) throw new Error('bad response');
+      const data = await res.json();
+      totalEntries = data.total;
+      renderRows(data.entries, offset);
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">Could not load history. Check the API is reachable.</div></td></tr>`;
+      console.warn('History load failed:', err.message);
+    }
 
-    const countrySelect = document.getElementById('filter-country');
-    const distinctNations = [...new Set(allDrivers.map(d => d.nation).filter(Boolean))].sort();
-    distinctNations.forEach(n => {
-      const opt = document.createElement('option');
-      opt.value = n;
-      opt.textContent = `${flagForCountry(n)} ${n}`;
-      countrySelect.appendChild(opt);
-    });
+    updatePagination();
   }
 
-  function getFiltered() {
-    const rankThreshold = (name) => ranks.find(r => r.name === name)?.threshold ?? -1;
-    const divisionOrder = (name) => divisions.find(d => d.name === name)?.sort_order ?? 999;
+  function renderRows(entries, offset) {
+    const tbody = document.getElementById('history-rows');
+    if (entries.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No points changes logged yet.</div></td></tr>`;
+      return;
+    }
 
-    return allDrivers
-      .filter(d => filters.rank === 'all' || d.license_level === filters.rank)
-      .filter(d => filters.division === 'all' || d.division === filters.division)
-      .filter(d => filters.country === 'all' || d.nation === filters.country)
-      .sort((a, b) => {
-        const rankDiff = rankThreshold(b.license_level) - rankThreshold(a.license_level);
-        if (rankDiff !== 0) return rankDiff;
-        const divDiff = divisionOrder(a.division) - divisionOrder(b.division);
-        if (divDiff !== 0) return divDiff;
-        const pointsDiff = b.points - a.points;
-        if (pointsDiff !== 0) return pointsDiff;
-        return a.driver_name.localeCompare(b.driver_name);
-      });
+    tbody.innerHTML = entries.map(e => {
+      const nation = nationByDriver.get(e.discord_id);
+      const flag = nation ? flagForCountry(nation) : '';
+      const deltaClass = e.delta >= 0 ? 'delta-pos' : 'delta-neg';
+      const deltaSign = e.delta >= 0 ? '+' : '';
+      const when = formatTimestamp(e.created_at);
+      const sourceLabel = e.source === 'addpoints' ? 'Discord' : 'Website';
+      return `
+        <tr>
+          <td class="timestamp">${when}</td>
+          <td class="driver-name">${flag ? `<span class="flag">${flag}</span> ` : ''}${escapeHtml(e.driver_name)}</td>
+          <td class="num-col ${deltaClass}">${deltaSign}${e.delta.toLocaleString()}</td>
+          <td class="num-col points">${e.new_total.toLocaleString()}</td>
+          <td class="reason-text">${e.reason ? escapeHtml(e.reason) : '—'}</td>
+          <td><span class="source-tag">${sourceLabel}</span></td>
+        </tr>
+      `;
+    }).join('');
   }
 
-  function renderPage() {
-    const filtered = getFiltered();
-    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-    currentPage = Math.min(currentPage, totalPages - 1);
+  function formatTimestamp(isoLike) {
+    // D1's datetime('now') gives 'YYYY-MM-DD HH:MM:SS' in UTC
+    const d = new Date(isoLike.replace(' ', 'T') + 'Z');
+    if (isNaN(d.getTime())) return isoLike;
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  }
 
+  function updatePagination() {
+    const totalPages = Math.max(1, Math.ceil(totalEntries / PAGE_SIZE));
     const start = currentPage * PAGE_SIZE;
-    const pageItems = filtered.slice(start, start + PAGE_SIZE);
-
-    const tbody = document.getElementById('driver-rows');
-    if (pageItems.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No drivers match these filters.</div></td></tr>`;
-    } else {
-      tbody.innerHTML = pageItems.map((d, i) => {
-        const badgeColor = colorForRank(d.license_level);
-        const divColor = colorForDivision(d.division);
-        const divIcon = divisions.find(x => x.name === d.division)?.icon || '';
-        const flag = flagForCountry(d.nation);
-        return `
-          <tr>
-            <td class="pos">${start + i + 1}</td>
-            <td class="driver-name">${flag ? `<span class="flag">${flag}</span> ` : ''}${escapeHtml(d.driver_name)}</td>
-            <td class="nation nation-col">${escapeHtml(d.nation || 'Unknown')}</td>
-            <td><span class="division-tag" style="border-color:${divColor};color:${divColor}">${divIcon ? divIcon + ' ' : ''}${escapeHtml(d.division || 'No Division')}</span></td>
-            <td><span class="license-badge" style="background:${badgeColor};color:${lerpText(badgeColor)}">${escapeHtml(d.license_level)}</span></td>
-            <td class="num-col points">${d.points.toLocaleString()}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    const indicator = filtered.length === 0
+    const indicator = totalEntries === 0
       ? '0 of 0'
-      : `${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length}`;
+      : `${start + 1}–${Math.min(start + PAGE_SIZE, totalEntries)} of ${totalEntries}`;
     document.getElementById('page-indicator').textContent = indicator;
     document.getElementById('prev-page').disabled = currentPage === 0;
     document.getElementById('next-page').disabled = currentPage >= totalPages - 1;
@@ -911,23 +849,14 @@ const COUNTRIES = [
     return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  document.getElementById('filter-rank').addEventListener('change', (e) => {
-    filters.rank = e.target.value; currentPage = 0; renderPage();
-  });
-  document.getElementById('filter-division').addEventListener('change', (e) => {
-    filters.division = e.target.value; currentPage = 0; renderPage();
-  });
-  document.getElementById('filter-country').addEventListener('change', (e) => {
-    filters.country = e.target.value; currentPage = 0; renderPage();
-  });
   document.getElementById('prev-page').addEventListener('click', () => {
-    if (currentPage > 0) { currentPage--; renderPage(); }
+    if (currentPage > 0) { currentPage--; loadPage(); }
   });
   document.getElementById('next-page').addEventListener('click', () => {
-    currentPage++; renderPage();
+    currentPage++; loadPage();
   });
 
-  loadAll();
+  loadNations().then(loadPage);
 </script>
 
 </body>
