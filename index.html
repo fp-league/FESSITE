@@ -317,7 +317,8 @@
   <div class="wrap">
     <div class="brand">FES <span>RANKINGS</span></div>
     <div class="nav-links">
-      <a href="#rankings">Rankings</a>
+      <a href="browse.html">Browse All</a>
+      <a href="#rankings">Top Tier</a>
       <a href="#" id="refresh-link">Refresh</a>
       <a href="#" id="manage-ranks-link" style="display:none">Manage Ranks</a>
       <a href="#" id="manage-divisions-link" style="display:none">Manage Divisions</a>
@@ -328,9 +329,9 @@
 
 <header class="hero">
   <div class="wrap">
-    <div class="eyebrow">Live Standings</div>
-    <h1>Every driver.<br>Every rank.<br>One grid.</h1>
-    <p class="sub">The full FES license and points database — updated after every race weekend.</p>
+    <div class="eyebrow" id="hero-eyebrow">Live Standings</div>
+    <h1 id="hero-title">The top tier.<br>Right now.</h1>
+    <p class="sub" id="hero-sub">A spotlight on FES's highest-ranked drivers. Looking for someone specific? <a href="browse.html" style="color:var(--accent);text-decoration:underline;">Browse every driver</a>.</p>
     <div class="stat-row">
       <div class="stat">
         <div class="num" id="stat-drivers">—</div>
@@ -350,10 +351,7 @@
 
 <div class="wrap" id="rankings">
   <div class="controls">
-    <input class="search" id="search" type="text" placeholder="Search driver or nation...">
-    <button class="chip active" data-division="all">All</button>
-    <!-- division chips injected here -->
-    <span id="division-chips"></span>
+    <input class="search" id="search" type="text" placeholder="Search top-tier drivers...">
   </div>
 
   <table>
@@ -598,13 +596,12 @@
 
   // ---- CONFIG ----
   // Point this at your deployed Worker, e.g. 'https://fes-driver-bot.<you>.workers.dev'
-  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev';
+  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev'
   const POLL_INTERVAL_MS = 30000;
 
   let drivers = [];
   let ranks = []; // [{name, threshold, color, sort_order}], fetched from /api/ranks
   let previousPoints = {};
-  let activeDivision = 'all';
   let searchTerm = '';
   let adminKey = localStorage.getItem('fes_admin_key') || null;
   let editingDriverId = null;
@@ -998,42 +995,29 @@
   function applyData(data) {
     previousPoints = Object.fromEntries(drivers.map(d => [d.discord_id, d.points]));
     drivers = data;
-    renderDivisionChips();
     renderStats();
     renderRows();
   }
 
   function renderStats() {
+    // These reflect the whole league, not just the top-tier drivers shown below
     document.getElementById('stat-drivers').textContent = drivers.length;
-    const divisions = new Set(drivers.map(d => d.division).filter(d => d && d !== 'No Division'));
-    document.getElementById('stat-divisions').textContent = divisions.size;
+    const activeDivisions = new Set(drivers.map(d => d.division).filter(d => d && d !== 'No Division'));
+    document.getElementById('stat-divisions').textContent = activeDivisions.size;
     const top = drivers.reduce((max, d) => Math.max(max, d.points), 0);
     document.getElementById('stat-top').textContent = top.toLocaleString();
   }
 
-  function renderDivisionChips() {
-    const container = document.getElementById('division-chips');
-    const divisions = [...new Set(drivers.map(d => d.division))].filter(Boolean);
-    container.innerHTML = divisions.map(div =>
-      `<button class="chip" data-division="${div}">${div}</button>`
-    ).join('');
-    attachChipListeners();
-  }
-
-  function attachChipListeners() {
-    document.querySelectorAll('.chip').forEach(chip => {
-      chip.onclick = () => {
-        activeDivision = chip.dataset.division;
-        document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
-        chip.classList.add('active');
-        renderRows();
-      };
-    });
+  function topRankName() {
+    if (ranks.length === 0) return null;
+    return ranks.reduce((top, r) => (r.threshold > top.threshold ? r : top), ranks[0]).name;
   }
 
   function renderRows() {
     const tbody = document.getElementById('driver-rows');
-    let filtered = drivers.filter(d => activeDivision === 'all' || d.division === activeDivision);
+    // Public view spotlights only the top rank; admins see everyone so editing still works for all drivers
+    const topRank = topRankName();
+    let filtered = adminKey ? [...drivers] : drivers.filter(d => d.license_level === topRank);
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       filtered = filtered.filter(d =>
@@ -1055,7 +1039,8 @@
     });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">No drivers match. Try a different search or division.</div></td></tr>`;
+      const emptyMsg = adminKey ? 'No drivers match.' : `No ${topRank || 'top-tier'} drivers yet — check back after the next rank-up, or browse everyone.`;
+      tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">${emptyMsg}</div></td></tr>`;
       return;
     }
 
@@ -1120,6 +1105,7 @@
     link.classList.toggle('active', !!adminKey);
     document.getElementById('manage-ranks-link').style.display = adminKey ? '' : 'none';
     document.getElementById('manage-divisions-link').style.display = adminKey ? '' : 'none';
+    document.getElementById('search').placeholder = adminKey ? 'Search all drivers...' : 'Search top-tier drivers...';
     renderRows();
   }
 

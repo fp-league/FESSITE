@@ -1,0 +1,934 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FES — Browse Drivers</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+
+  :root {
+    --bg: #08060F;
+    --bg-raised: #120E1F;
+    --bg-card: #171129;
+    --line: #2A2140;
+    --text: #ECE9F5;
+    --text-dim: #9C93B8;
+    --accent: #A855F7;
+    --accent-dim: #4C1D7A;
+
+    --tier-4: #E8C468;   /* Rank IV - gold */
+    --tier-3: #C7CDD6;   /* Rank III - silver */
+    --tier-2: #C58B4E;   /* Rank II - bronze */
+    --tier-1: #8B7FE8;   /* Rank I - violet-blue */
+    --tier-0: #4A4162;   /* No Rank - slate-purple */
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+  }
+
+  #bg-canvas {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+  }
+
+  nav, header.hero, div.wrap, footer, .modal-overlay { position: relative; z-index: 1; }
+
+  ::selection { background: var(--accent); color: white; }
+
+  a { color: inherit; }
+
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- NAV ---------- */
+  nav {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(8,6,15,0.75);
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+  .brand { font-family: 'Orbitron', sans-serif; font-weight: 900; font-size: 19px; letter-spacing: 0.5px; }
+  .brand span { color: var(--accent); }
+  .nav-links { display: flex; gap: 28px; font-size: 14px; color: var(--text-dim); }
+  .nav-links a:hover { color: var(--text); }
+
+  /* ---------- HERO ---------- */
+  header.hero {
+    padding: 72px 0 48px;
+    border-bottom: 1px solid var(--line);
+    background:
+      radial-gradient(ellipse 900px 400px at 15% -10%, rgba(168,85,247,0.18), transparent 60%);
+  }
+  .eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 16px; display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before { content: ''; width: 6px; height: 6px; background: var(--accent); border-radius: 50%; box-shadow: 0 0 8px var(--accent); }
+  h1 {
+    font-family: 'Orbitron', sans-serif;
+    font-weight: 900; font-size: clamp(34px, 5vw, 56px);
+    line-height: 1.05; letter-spacing: -0.5px; max-width: 760px;
+  }
+  .hero p.sub { color: var(--text-dim); font-size: 16px; margin-top: 18px; max-width: 560px; line-height: 1.6; }
+
+  .stat-row { display: flex; gap: 40px; margin-top: 40px; flex-wrap: wrap; }
+  .stat .num {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700;
+    font-size: 32px; color: var(--text);
+    font-variant-numeric: tabular-nums;
+  }
+  .stat .label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-top: 4px; }
+
+  /* ---------- CONTROLS ---------- */
+  .controls {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 28px 0; border-bottom: 1px solid var(--line);
+  }
+  .search {
+    flex: 1; min-width: 200px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-size: 14px; font-family: inherit;
+  }
+  .search:focus { outline: none; border-color: var(--accent); }
+  .chip {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+    padding: 9px 16px; border-radius: 999px; font-size: 13px; cursor: pointer;
+    transition: all 0.15s;
+  }
+  .chip:hover { color: var(--text); border-color: #3a4150; }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  /* ---------- TABLE ---------- */
+  table { width: 100%; border-collapse: collapse; margin: 32px 0 80px; }
+  thead th {
+    text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-dim); font-weight: 500; padding: 0 16px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  thead th.num-col, tbody td.num-col { text-align: right; }
+
+  tbody tr {
+    border-bottom: 1px solid var(--line);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: var(--bg-card); }
+  tbody td { padding: 16px; font-size: 14px; }
+
+  .pos {
+    font-family: 'JetBrains Mono', monospace; color: var(--text-dim); font-size: 13px;
+    width: 40px;
+  }
+  .driver-name { font-weight: 600; }
+  .flag { margin-right: 2px; }
+  .nation { color: var(--text-dim); font-size: 13px; }
+  .division-tag {
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim);
+    background: var(--bg-raised); padding: 3px 8px; border-radius: 4px; border: 1px solid var(--line);
+  }
+
+  .license-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 700;
+    padding: 4px 10px 4px 8px; border-radius: 4px; letter-spacing: 0.5px;
+    position: relative; overflow: hidden; color: #0A0C10;
+  }
+  .license-badge::before {
+    content: ''; position: absolute; inset: 0;
+    background: repeating-linear-gradient(135deg, rgba(0,0,0,0.12) 0 4px, transparent 4px 9px);
+  }
+  .license-badge.t4 { background: var(--tier-4); }
+  .license-badge.t3 { background: var(--tier-3); }
+  .license-badge.t2 { background: var(--tier-2); }
+  .license-badge.t1 { background: var(--tier-1); color: #0A0C10; }
+  .license-badge.t0 { background: var(--tier-0); color: #C7CDD6; }
+  /* Colors now come from the ranks table and are applied inline per-badge */
+
+  .points {
+    font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px;
+    font-variant-numeric: tabular-nums;
+  }
+  .points.flash { animation: flashUp 1.2s ease; }
+  @keyframes flashUp {
+    0% { color: #6EE7A8; text-shadow: 0 0 12px rgba(110,231,168,0.6); }
+    100% { color: var(--text); text-shadow: none; }
+  }
+
+  .empty-state {
+    text-align: center; padding: 60px 20px; color: var(--text-dim);
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+  }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 28px 0; color: var(--text-dim); font-size: 13px;
+  }
+
+  @media (max-width: 640px) {
+    .nav-links { display: none; }
+    thead th.nation-col, tbody td.nation-col { display: none; }
+    table, thead, tbody, th, td, tr { display: block; }
+    thead { display: none; }
+    tbody tr { padding: 14px 16px; }
+    tbody td { padding: 4px 0; border: none; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .points.flash { animation: none; }
+  }
+
+  /* ---------- ADMIN ---------- */
+  #admin-link.active { color: var(--accent); }
+  .admin-banner {
+    background: var(--accent-dim); border: 1px solid var(--accent);
+    color: var(--text); font-size: 13px; padding: 10px 16px; border-radius: 8px;
+    margin-top: 20px; display: flex; align-items: center; justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .admin-banner button {
+    background: none; border: 1px solid var(--accent); color: var(--text);
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  }
+  .edit-col { width: 40px; }
+  .edit-btn {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text-dim);
+    width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .edit-btn:hover { color: var(--text); border-color: var(--accent); }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: flex; align-items: center; justify-content: center; z-index: 100; padding: 20px;
+  }
+  .modal {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 28px; width: 100%; max-width: 400px;
+  }
+  .modal-title {
+    font-family: 'Orbitron', sans-serif; font-weight: 700; font-size: 17px; margin-bottom: 20px;
+  }
+  .field { margin-bottom: 16px; }
+  .field label {
+    display: block; font-size: 12px; color: var(--text-dim); text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 10px 12px; color: var(--text); font-family: inherit; font-size: 14px;
+  }
+  .field input:focus, .field select:focus { outline: none; border-color: var(--accent); }
+  .modal-error { color: var(--accent); font-size: 13px; margin-bottom: 8px; min-height: 18px; }
+  .modal-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .btn-primary {
+    background: var(--accent); border: none; color: white; padding: 10px 18px;
+    border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  .btn-primary:hover { background: #d12a3f; }
+  .btn-ghost {
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    padding: 10px 16px; border-radius: 6px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .btn-ghost:hover { color: var(--text); border-color: #3a4150; }
+  #modal-delete { border-color: var(--accent-dim); color: var(--accent); }
+  #modal-delete:hover { border-color: var(--accent); }
+
+  /* ---------- RANKS MANAGEMENT ---------- */
+  .ranks-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; max-height: 320px; overflow-y: auto; }
+  .rank-row {
+    display: flex; flex-direction: column; gap: 8px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .rank-row-top { display: flex; align-items: center; gap: 10px; }
+  .rank-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+  .rank-row input[type="text"], .rank-row input[type="number"] {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 8px; color: var(--text); font-size: 13px; font-family: inherit; width: 100%;
+  }
+  .rank-row .rank-name-input { flex: 1.4; min-width: 0; }
+  .rank-row .rank-threshold-input { flex: 0.9; min-width: 0; }
+  .rank-row .rank-role-input { flex: 1.3; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .rank-row input[type="color"] {
+    width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; flex-shrink: 0;
+  }
+  .rank-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .rank-row-actions button {
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .rank-row-actions button:hover { color: var(--text); border-color: var(--accent); }
+  .rank-row-actions .rank-delete-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .rank-add-form {
+    border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  .rank-add-title { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .rank-form-grid {
+    display: grid; grid-template-columns: 1.4fr 0.9fr auto 1.3fr; gap: 8px;
+  }
+  .rank-form-grid input[type="text"], .rank-form-grid input[type="number"] {
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .rank-form-grid input[type="color"] {
+    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer;
+  }
+
+  @media (max-width: 640px) {
+    .rank-form-grid { grid-template-columns: 1fr 1fr; }
+    .rank-row { flex-wrap: wrap; }
+  }
+
+  .division-row {
+    display: flex; flex-direction: column; gap: 8px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .division-row-top { display: flex; align-items: center; gap: 10px; }
+  .division-row input[type="text"], .division-row input[type="color"] {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 8px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .division-row .division-name-input { flex: 1.4; min-width: 0; }
+  .division-row .division-icon-input { width: 50px; flex-shrink: 0; }
+  .division-row .division-role-input { width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .division-row input[type="color"] {
+    width: 30px; height: 30px; padding: 0; cursor: pointer; flex-shrink: 0;
+  }
+  .division-form-grid { display: flex; gap: 8px; }
+  .division-form-grid input[type="text"] {
+    flex: 1; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .division-form-grid input[type="color"] {
+    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; flex-shrink: 0;
+  }
+
+
+  /* ---------- BROWSE PAGE EXTRAS ---------- */
+  .filters-row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    padding: 28px 0; border-bottom: 1px solid var(--line);
+  }
+  .filters-row select {
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px;
+    padding: 10px 14px; color: var(--text); font-size: 14px; font-family: inherit; cursor: pointer;
+  }
+  .filters-row select:focus { outline: none; border-color: var(--accent); }
+  .filter-label { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 1px; margin-right: 4px; }
+
+  .pagination {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    padding: 28px 0 60px;
+  }
+  .page-btn {
+    background: var(--bg-raised); border: 1px solid var(--line); color: var(--text);
+    padding: 8px 18px; border-radius: 8px; font-size: 14px; cursor: pointer; font-family: inherit;
+  }
+  .page-btn:hover:not(:disabled) { border-color: var(--accent); }
+  .page-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+  .page-indicator {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-dim);
+  }
+
+  .back-link {
+    display: inline-flex; align-items: center; gap: 6px; color: var(--text-dim); font-size: 13px;
+    text-decoration: none; margin-bottom: 4px;
+  }
+  .back-link:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+
+<nav>
+  <div class="wrap">
+    <div class="brand">FES <span>RANKINGS</span></div>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="#browse">Browse</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" style="padding: 48px 0 32px;">
+  <div class="wrap">
+    <a href="index.html" class="back-link">← Back to home</a>
+    <div class="eyebrow">Full Roster</div>
+    <h1 style="font-size: clamp(28px, 4vw, 42px);">Browse every driver.</h1>
+    <p class="sub">Filter by rank, division, or country. 100 drivers per page.</p>
+  </div>
+</header>
+
+<div class="wrap" id="browse">
+  <div class="filters-row">
+    <span class="filter-label">Rank</span>
+    <select id="filter-rank"><option value="all">All ranks</option></select>
+
+    <span class="filter-label">Division</span>
+    <select id="filter-division"><option value="all">All divisions</option></select>
+
+    <span class="filter-label">Country</span>
+    <select id="filter-country"><option value="all">All countries</option></select>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th style="width:40px">#</th>
+        <th>Driver</th>
+        <th class="nation-col">Nation</th>
+        <th>Division</th>
+        <th>License</th>
+        <th class="num-col">Points</th>
+      </tr>
+    </thead>
+    <tbody id="driver-rows">
+      <tr><td colspan="6"><div class="empty-state">Loading drivers…</div></td></tr>
+    </tbody>
+  </table>
+
+  <div class="pagination">
+    <button class="page-btn" id="prev-page">‹ Prev</button>
+    <span class="page-indicator" id="page-indicator">—</span>
+    <button class="page-btn" id="next-page">Next ›</button>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">FES — Driver Rankings. Data synced from the FES registration system.</div>
+</footer>
+
+<script>
+  // Point this at your deployed Worker, same as index.html
+  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev'
+  const PAGE_SIZE = 100;
+
+(function initBackground() {
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let w, h, particles;
+    const PARTICLE_COUNT = 55;
+    const GRID_SIZE = 46;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function makeParticles() {
+      particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.8 + 0.6,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
+        alpha: Math.random() * 0.5 + 0.2,
+      }));
+    }
+    makeParticles();
+
+    let t = 0;
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, w, h);
+
+      // Base vertical gradient wash, near-black to deep purple
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#08060F');
+      grad.addColorStop(1, '#0F0A1E');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Slow-drifting perspective-style grid lines
+      ctx.strokeStyle = 'rgba(168,85,247,0.06)';
+      ctx.lineWidth = 1;
+      const offset = (t * 6) % GRID_SIZE;
+      for (let x = -offset; x < w; x += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = -offset; y < h; y += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Soft glowing orb, slowly pulsing
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.4);
+      const orbGrad = ctx.createRadialGradient(
+        w * 0.8, h * 0.15, 0,
+        w * 0.8, h * 0.15, 500 + pulse * 60
+      );
+      orbGrad.addColorStop(0, `rgba(168,85,247,${0.10 + pulse * 0.05})`);
+      orbGrad.addColorStop(1, 'rgba(168,85,247,0)');
+      ctx.fillStyle = orbGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Drifting particles with connecting lines when close
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,170,255,${p.alpha})`;
+        ctx.fill();
+      }
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const a = particles[i], b = particles[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.strokeStyle = `rgba(168,85,247,${0.12 * (1 - dist / 120)})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    if (reduceMotion) {
+      drawFrame(); // static single frame, no motion for accessibility
+      return;
+    }
+
+    function loop() {
+      t += 0.016;
+      drawFrame();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  })();
+
+const COUNTRIES = [
+    ["Afghanistan","AF"],
+    ["Albania","AL"],
+    ["Algeria","DZ"],
+    ["American Samoa","AS"],
+    ["Andorra","AD"],
+    ["Angola","AO"],
+    ["Anguilla","AI"],
+    ["Antarctica","AQ"],
+    ["Antigua and Barbuda","AG"],
+    ["Argentina","AR"],
+    ["Armenia","AM"],
+    ["Aruba","AW"],
+    ["Australia","AU"],
+    ["Austria","AT"],
+    ["Azerbaijan","AZ"],
+    ["Bahamas","BS"],
+    ["Bahrain","BH"],
+    ["Bangladesh","BD"],
+    ["Barbados","BB"],
+    ["Belarus","BY"],
+    ["Belgium","BE"],
+    ["Belize","BZ"],
+    ["Benin","BJ"],
+    ["Bermuda","BM"],
+    ["Bhutan","BT"],
+    ["Bolivia, Plurinational State of","BO"],
+    ["Bonaire, Sint Eustatius and Saba","BQ"],
+    ["Bosnia and Herzegovina","BA"],
+    ["Botswana","BW"],
+    ["Bouvet Island","BV"],
+    ["Brazil","BR"],
+    ["British Indian Ocean Territory","IO"],
+    ["Brunei Darussalam","BN"],
+    ["Bulgaria","BG"],
+    ["Burkina Faso","BF"],
+    ["Burundi","BI"],
+    ["Cabo Verde","CV"],
+    ["Cambodia","KH"],
+    ["Cameroon","CM"],
+    ["Canada","CA"],
+    ["Cayman Islands","KY"],
+    ["Central African Republic","CF"],
+    ["Chad","TD"],
+    ["Chile","CL"],
+    ["China","CN"],
+    ["Christmas Island","CX"],
+    ["Cocos (Keeling) Islands","CC"],
+    ["Colombia","CO"],
+    ["Comoros","KM"],
+    ["Congo","CG"],
+    ["Congo, The Democratic Republic of the","CD"],
+    ["Cook Islands","CK"],
+    ["Costa Rica","CR"],
+    ["Croatia","HR"],
+    ["Cuba","CU"],
+    ["Curaçao","CW"],
+    ["Cyprus","CY"],
+    ["Czechia","CZ"],
+    ["Côte d'Ivoire","CI"],
+    ["Denmark","DK"],
+    ["Djibouti","DJ"],
+    ["Dominica","DM"],
+    ["Dominican Republic","DO"],
+    ["Ecuador","EC"],
+    ["Egypt","EG"],
+    ["El Salvador","SV"],
+    ["Equatorial Guinea","GQ"],
+    ["Eritrea","ER"],
+    ["Estonia","EE"],
+    ["Eswatini","SZ"],
+    ["Ethiopia","ET"],
+    ["Falkland Islands (Malvinas)","FK"],
+    ["Faroe Islands","FO"],
+    ["Fiji","FJ"],
+    ["Finland","FI"],
+    ["France","FR"],
+    ["French Guiana","GF"],
+    ["French Polynesia","PF"],
+    ["French Southern Territories","TF"],
+    ["Gabon","GA"],
+    ["Gambia","GM"],
+    ["Georgia","GE"],
+    ["Germany","DE"],
+    ["Ghana","GH"],
+    ["Gibraltar","GI"],
+    ["Greece","GR"],
+    ["Greenland","GL"],
+    ["Grenada","GD"],
+    ["Guadeloupe","GP"],
+    ["Guam","GU"],
+    ["Guatemala","GT"],
+    ["Guernsey","GG"],
+    ["Guinea","GN"],
+    ["Guinea-Bissau","GW"],
+    ["Guyana","GY"],
+    ["Haiti","HT"],
+    ["Heard Island and McDonald Islands","HM"],
+    ["Holy See (Vatican City State)","VA"],
+    ["Honduras","HN"],
+    ["Hong Kong","HK"],
+    ["Hungary","HU"],
+    ["Iceland","IS"],
+    ["India","IN"],
+    ["Indonesia","ID"],
+    ["Iran, Islamic Republic of","IR"],
+    ["Iraq","IQ"],
+    ["Ireland","IE"],
+    ["Isle of Man","IM"],
+    ["Israel","IL"],
+    ["Italy","IT"],
+    ["Jamaica","JM"],
+    ["Japan","JP"],
+    ["Jersey","JE"],
+    ["Jordan","JO"],
+    ["Kazakhstan","KZ"],
+    ["Kenya","KE"],
+    ["Kiribati","KI"],
+    ["Korea, Democratic People's Republic of","KP"],
+    ["Korea, Republic of","KR"],
+    ["Kuwait","KW"],
+    ["Kyrgyzstan","KG"],
+    ["Lao People's Democratic Republic","LA"],
+    ["Latvia","LV"],
+    ["Lebanon","LB"],
+    ["Lesotho","LS"],
+    ["Liberia","LR"],
+    ["Libya","LY"],
+    ["Liechtenstein","LI"],
+    ["Lithuania","LT"],
+    ["Luxembourg","LU"],
+    ["Macao","MO"],
+    ["Madagascar","MG"],
+    ["Malawi","MW"],
+    ["Malaysia","MY"],
+    ["Maldives","MV"],
+    ["Mali","ML"],
+    ["Malta","MT"],
+    ["Marshall Islands","MH"],
+    ["Martinique","MQ"],
+    ["Mauritania","MR"],
+    ["Mauritius","MU"],
+    ["Mayotte","YT"],
+    ["Mexico","MX"],
+    ["Micronesia, Federated States of","FM"],
+    ["Moldova, Republic of","MD"],
+    ["Monaco","MC"],
+    ["Mongolia","MN"],
+    ["Montenegro","ME"],
+    ["Montserrat","MS"],
+    ["Morocco","MA"],
+    ["Mozambique","MZ"],
+    ["Myanmar","MM"],
+    ["Namibia","NA"],
+    ["Nauru","NR"],
+    ["Nepal","NP"],
+    ["Netherlands","NL"],
+    ["New Caledonia","NC"],
+    ["New Zealand","NZ"],
+    ["Nicaragua","NI"],
+    ["Niger","NE"],
+    ["Nigeria","NG"],
+    ["Niue","NU"],
+    ["Norfolk Island","NF"],
+    ["North Macedonia","MK"],
+    ["Northern Mariana Islands","MP"],
+    ["Norway","NO"],
+    ["Oman","OM"],
+    ["Pakistan","PK"],
+    ["Palau","PW"],
+    ["Palestine, State of","PS"],
+    ["Panama","PA"],
+    ["Papua New Guinea","PG"],
+    ["Paraguay","PY"],
+    ["Peru","PE"],
+    ["Philippines","PH"],
+    ["Pitcairn","PN"],
+    ["Poland","PL"],
+    ["Portugal","PT"],
+    ["Puerto Rico","PR"],
+    ["Qatar","QA"],
+    ["Romania","RO"],
+    ["Russian Federation","RU"],
+    ["Rwanda","RW"],
+    ["Réunion","RE"],
+    ["Saint Barthélemy","BL"],
+    ["Saint Helena, Ascension and Tristan da Cunha","SH"],
+    ["Saint Kitts and Nevis","KN"],
+    ["Saint Lucia","LC"],
+    ["Saint Martin (French part)","MF"],
+    ["Saint Pierre and Miquelon","PM"],
+    ["Saint Vincent and the Grenadines","VC"],
+    ["Samoa","WS"],
+    ["San Marino","SM"],
+    ["Sao Tome and Principe","ST"],
+    ["Saudi Arabia","SA"],
+    ["Senegal","SN"],
+    ["Serbia","RS"],
+    ["Seychelles","SC"],
+    ["Sierra Leone","SL"],
+    ["Singapore","SG"],
+    ["Sint Maarten (Dutch part)","SX"],
+    ["Slovakia","SK"],
+    ["Slovenia","SI"],
+    ["Solomon Islands","SB"],
+    ["Somalia","SO"],
+    ["South Africa","ZA"],
+    ["South Georgia and the South Sandwich Islands","GS"],
+    ["South Sudan","SS"],
+    ["Spain","ES"],
+    ["Sri Lanka","LK"],
+    ["Sudan","SD"],
+    ["Suriname","SR"],
+    ["Svalbard and Jan Mayen","SJ"],
+    ["Sweden","SE"],
+    ["Switzerland","CH"],
+    ["Syrian Arab Republic","SY"],
+    ["Taiwan, Province of China","TW"],
+    ["Tajikistan","TJ"],
+    ["Tanzania, United Republic of","TZ"],
+    ["Thailand","TH"],
+    ["Timor-Leste","TL"],
+    ["Togo","TG"],
+    ["Tokelau","TK"],
+    ["Tonga","TO"],
+    ["Trinidad and Tobago","TT"],
+    ["Tunisia","TN"],
+    ["Turkmenistan","TM"],
+    ["Turks and Caicos Islands","TC"],
+    ["Tuvalu","TV"],
+    ["Türkiye","TR"],
+    ["Uganda","UG"],
+    ["Ukraine","UA"],
+    ["United Arab Emirates","AE"],
+    ["United Kingdom","GB"],
+    ["United States","US"],
+    ["United States Minor Outlying Islands","UM"],
+    ["Uruguay","UY"],
+    ["Uzbekistan","UZ"],
+    ["Vanuatu","VU"],
+    ["Venezuela, Bolivarian Republic of","VE"],
+    ["Viet Nam","VN"],
+    ["Virgin Islands, British","VG"],
+    ["Virgin Islands, U.S.","VI"],
+    ["Wallis and Futuna","WF"],
+    ["Western Sahara","EH"],
+    ["Yemen","YE"],
+    ["Zambia","ZM"],
+    ["Zimbabwe","ZW"],
+    ["Åland Islands","AX"]
+  ];
+
+  function flagForCountry(name) {
+    const entry = COUNTRIES.find(c => c[0] === name);
+    if (!entry) return '';
+    const code = entry[1];
+    return String.fromCodePoint(...[...code.toUpperCase()].map(c => 127397 + c.charCodeAt(0)));
+  }
+
+  let allDrivers = [];
+  let ranks = [];
+  let divisions = [];
+  let currentPage = 0;
+  let filters = { rank: 'all', division: 'all', country: 'all' };
+
+  function lerpText(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16), g = parseInt(c.substring(2, 4), 16), b = parseInt(c.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.55 ? '#0A0C10' : '#ECE9F5';
+  }
+
+  function colorForRank(rankName) {
+    const idx = ranks.findIndex(r => r.name === rankName);
+    if (idx === -1) return '#4A4162';
+    return ranks[idx].color || '#4A4162';
+  }
+
+  function colorForDivision(divisionName) {
+    const d = divisions.find(x => x.name === divisionName);
+    return d?.color || '#4A5162';
+  }
+
+  async function loadAll() {
+    try {
+      const [driversRes, ranksRes, divisionsRes] = await Promise.all([
+        fetch(`${API_BASE}/api/drivers`),
+        fetch(`${API_BASE}/api/ranks`),
+        fetch(`${API_BASE}/api/divisions`),
+      ]);
+      allDrivers = await driversRes.json();
+      ranks = await ranksRes.json();
+      divisions = await divisionsRes.json();
+    } catch (err) {
+      console.warn('Could not reach API:', err.message);
+      allDrivers = [];
+    }
+    ranks.sort((a, b) => a.threshold - b.threshold);
+    divisions.sort((a, b) => a.sort_order - b.sort_order);
+    populateFilters();
+    renderPage();
+  }
+
+  function populateFilters() {
+    const rankSelect = document.getElementById('filter-rank');
+    ranks.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.name;
+      opt.textContent = r.name;
+      rankSelect.appendChild(opt);
+    });
+
+    const divisionSelect = document.getElementById('filter-division');
+    divisions.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.name;
+      opt.textContent = `${d.icon ? d.icon + ' ' : ''}${d.name}`;
+      divisionSelect.appendChild(opt);
+    });
+
+    const countrySelect = document.getElementById('filter-country');
+    const distinctNations = [...new Set(allDrivers.map(d => d.nation).filter(Boolean))].sort();
+    distinctNations.forEach(n => {
+      const opt = document.createElement('option');
+      opt.value = n;
+      opt.textContent = `${flagForCountry(n)} ${n}`;
+      countrySelect.appendChild(opt);
+    });
+  }
+
+  function getFiltered() {
+    const rankThreshold = (name) => ranks.find(r => r.name === name)?.threshold ?? -1;
+    const divisionOrder = (name) => divisions.find(d => d.name === name)?.sort_order ?? 999;
+
+    return allDrivers
+      .filter(d => filters.rank === 'all' || d.license_level === filters.rank)
+      .filter(d => filters.division === 'all' || d.division === filters.division)
+      .filter(d => filters.country === 'all' || d.nation === filters.country)
+      .sort((a, b) => {
+        const rankDiff = rankThreshold(b.license_level) - rankThreshold(a.license_level);
+        if (rankDiff !== 0) return rankDiff;
+        const divDiff = divisionOrder(a.division) - divisionOrder(b.division);
+        if (divDiff !== 0) return divDiff;
+        const pointsDiff = b.points - a.points;
+        if (pointsDiff !== 0) return pointsDiff;
+        return a.driver_name.localeCompare(b.driver_name);
+      });
+  }
+
+  function renderPage() {
+    const filtered = getFiltered();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    currentPage = Math.min(currentPage, totalPages - 1);
+
+    const start = currentPage * PAGE_SIZE;
+    const pageItems = filtered.slice(start, start + PAGE_SIZE);
+
+    const tbody = document.getElementById('driver-rows');
+    if (pageItems.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="6"><div class="empty-state">No drivers match these filters.</div></td></tr>`;
+    } else {
+      tbody.innerHTML = pageItems.map((d, i) => {
+        const badgeColor = colorForRank(d.license_level);
+        const divColor = colorForDivision(d.division);
+        const divIcon = divisions.find(x => x.name === d.division)?.icon || '';
+        const flag = flagForCountry(d.nation);
+        return `
+          <tr>
+            <td class="pos">${start + i + 1}</td>
+            <td class="driver-name">${flag ? `<span class="flag">${flag}</span> ` : ''}${escapeHtml(d.driver_name)}</td>
+            <td class="nation nation-col">${escapeHtml(d.nation || 'Unknown')}</td>
+            <td><span class="division-tag" style="border-color:${divColor};color:${divColor}">${divIcon ? divIcon + ' ' : ''}${escapeHtml(d.division || 'No Division')}</span></td>
+            <td><span class="license-badge" style="background:${badgeColor};color:${lerpText(badgeColor)}">${escapeHtml(d.license_level)}</span></td>
+            <td class="num-col points">${d.points.toLocaleString()}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    const indicator = filtered.length === 0
+      ? '0 of 0'
+      : `${start + 1}–${Math.min(start + PAGE_SIZE, filtered.length)} of ${filtered.length}`;
+    document.getElementById('page-indicator').textContent = indicator;
+    document.getElementById('prev-page').disabled = currentPage === 0;
+    document.getElementById('next-page').disabled = currentPage >= totalPages - 1;
+  }
+
+  function escapeHtml(str) {
+    return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  document.getElementById('filter-rank').addEventListener('change', (e) => {
+    filters.rank = e.target.value; currentPage = 0; renderPage();
+  });
+  document.getElementById('filter-division').addEventListener('change', (e) => {
+    filters.division = e.target.value; currentPage = 0; renderPage();
+  });
+  document.getElementById('filter-country').addEventListener('change', (e) => {
+    filters.country = e.target.value; currentPage = 0; renderPage();
+  });
+  document.getElementById('prev-page').addEventListener('click', () => {
+    if (currentPage > 0) { currentPage--; renderPage(); }
+  });
+  document.getElementById('next-page').addEventListener('click', () => {
+    currentPage++; renderPage();
+  });
+
+  loadAll();
+</script>
+
+</body>
+</html>
