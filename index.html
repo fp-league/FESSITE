@@ -8,20 +8,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0A0C10;
-    --bg-raised: #12151C;
-    --bg-card: #171B24;
-    --line: #232833;
-    --text: #E9ECF2;
-    --text-dim: #8B93A3;
-    --accent: #E8344A;
-    --accent-dim: #7A1B27;
+    --bg: #08060F;
+    --bg-raised: #120E1F;
+    --bg-card: #171129;
+    --line: #2A2140;
+    --text: #ECE9F5;
+    --text-dim: #9C93B8;
+    --accent: #A855F7;
+    --accent-dim: #4C1D7A;
 
     --tier-4: #E8C468;   /* Rank IV - gold */
     --tier-3: #C7CDD6;   /* Rank III - silver */
     --tier-2: #C58B4E;   /* Rank II - bronze */
-    --tier-1: #6C93B8;   /* Rank I - steel blue */
-    --tier-0: #4A5162;   /* No Rank - slate */
+    --tier-1: #8B7FE8;   /* Rank I - violet-blue */
+    --tier-0: #4A4162;   /* No Rank - slate-purple */
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,7 +31,15 @@
     color: var(--text);
     font-family: 'Inter', sans-serif;
     -webkit-font-smoothing: antialiased;
+    position: relative;
   }
+
+  #bg-canvas {
+    position: fixed; inset: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none;
+  }
+
+  nav, header.hero, div.wrap, footer, .modal-overlay { position: relative; z-index: 1; }
 
   ::selection { background: var(--accent); color: white; }
 
@@ -42,7 +50,7 @@
   /* ---------- NAV ---------- */
   nav {
     position: sticky; top: 0; z-index: 50;
-    background: rgba(10,12,16,0.85);
+    background: rgba(8,6,15,0.75);
     backdrop-filter: blur(10px);
     border-bottom: 1px solid var(--line);
   }
@@ -57,7 +65,7 @@
     padding: 72px 0 48px;
     border-bottom: 1px solid var(--line);
     background:
-      radial-gradient(ellipse 900px 400px at 15% -10%, rgba(232,52,74,0.14), transparent 60%);
+      radial-gradient(ellipse 900px 400px at 15% -10%, rgba(168,85,247,0.18), transparent 60%);
   }
   .eyebrow {
     font-family: 'JetBrains Mono', monospace;
@@ -231,6 +239,7 @@
 </style>
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
 
 <nav>
   <div class="wrap">
@@ -352,9 +361,120 @@
 </div>
 
 <script>
+  // ---- ANIMATED BACKGROUND ----
+  (function initBackground() {
+    const canvas = document.getElementById('bg-canvas');
+    const ctx = canvas.getContext('2d');
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    let w, h, particles;
+    const PARTICLE_COUNT = 55;
+    const GRID_SIZE = 46;
+
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+    }
+    window.addEventListener('resize', resize);
+    resize();
+
+    function makeParticles() {
+      particles = Array.from({ length: PARTICLE_COUNT }, () => ({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 1.8 + 0.6,
+        vx: (Math.random() - 0.5) * 0.15,
+        vy: (Math.random() - 0.5) * 0.15,
+        alpha: Math.random() * 0.5 + 0.2,
+      }));
+    }
+    makeParticles();
+
+    let t = 0;
+
+    function drawFrame() {
+      ctx.clearRect(0, 0, w, h);
+
+      // Base vertical gradient wash, near-black to deep purple
+      const grad = ctx.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#08060F');
+      grad.addColorStop(1, '#0F0A1E');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Slow-drifting perspective-style grid lines
+      ctx.strokeStyle = 'rgba(168,85,247,0.06)';
+      ctx.lineWidth = 1;
+      const offset = (t * 6) % GRID_SIZE;
+      for (let x = -offset; x < w; x += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, h);
+        ctx.stroke();
+      }
+      for (let y = -offset; y < h; y += GRID_SIZE) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(w, y);
+        ctx.stroke();
+      }
+
+      // Soft glowing orb, slowly pulsing
+      const pulse = 0.5 + 0.5 * Math.sin(t * 0.4);
+      const orbGrad = ctx.createRadialGradient(
+        w * 0.8, h * 0.15, 0,
+        w * 0.8, h * 0.15, 500 + pulse * 60
+      );
+      orbGrad.addColorStop(0, `rgba(168,85,247,${0.10 + pulse * 0.05})`);
+      orbGrad.addColorStop(1, 'rgba(168,85,247,0)');
+      ctx.fillStyle = orbGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      // Drifting particles with connecting lines when close
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0) p.x = w; if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h; if (p.y > h) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(200,170,255,${p.alpha})`;
+        ctx.fill();
+      }
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const a = particles[i], b = particles[j];
+          const dx = a.x - b.x, dy = a.y - b.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 120) {
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.strokeStyle = `rgba(168,85,247,${0.12 * (1 - dist / 120)})`;
+            ctx.lineWidth = 1;
+            ctx.stroke();
+          }
+        }
+      }
+    }
+
+    if (reduceMotion) {
+      drawFrame(); // static single frame, no motion for accessibility
+      return;
+    }
+
+    function loop() {
+      t += 0.016;
+      drawFrame();
+      requestAnimationFrame(loop);
+    }
+    loop();
+  })();
+
   // ---- CONFIG ----
   // Point this at your deployed Worker, e.g. 'https://fes-driver-bot.<you>.workers.dev'
-  const API_BASE = 'https://fes-driver-bot.benjaminjameswestley.workers.dev';
+  const API_BASE = 'https://fes-driver-bot.benjaminwestley.workers.dev';
   const POLL_INTERVAL_MS = 30000;
 
   let drivers = [];
