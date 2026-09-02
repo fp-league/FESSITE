@@ -282,6 +282,20 @@
     .rank-form-grid { grid-template-columns: 1fr 1fr; }
     .rank-row { flex-wrap: wrap; }
   }
+
+  .division-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .division-row input[type="text"] {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 8px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .division-form-grid { display: flex; gap: 8px; }
+  .division-form-grid input[type="text"] {
+    flex: 1; background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
 </style>
 </head>
 <body>
@@ -294,6 +308,7 @@
       <a href="#rankings">Rankings</a>
       <a href="#" id="refresh-link">Refresh</a>
       <a href="#" id="manage-ranks-link" style="display:none">Manage Ranks</a>
+      <a href="#" id="manage-divisions-link" style="display:none">Manage Divisions</a>
       <a href="#" id="admin-link">Admin</a>
     </div>
   </div>
@@ -364,7 +379,9 @@
     </div>
     <div class="field">
       <label>Division</label>
-      <input id="f-division" type="text">
+      <select id="f-division">
+        <!-- division options injected dynamically -->
+      </select>
     </div>
     <div class="field">
       <label>License level</label>
@@ -423,6 +440,27 @@
     <div class="modal-actions">
       <div style="flex:1"></div>
       <button class="btn-ghost" id="ranks-modal-close">Close</button>
+    </div>
+  </div>
+</div>
+
+<div id="divisions-modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-title">Manage divisions</div>
+    <div id="divisions-list" class="ranks-list"><!-- existing divisions injected here --></div>
+
+    <div class="rank-add-form">
+      <div class="rank-add-title">Add a new division</div>
+      <div class="division-form-grid">
+        <input id="new-division-name" type="text" placeholder="Division name (e.g. F1)">
+        <button class="btn-primary" id="add-division-btn">Add</button>
+      </div>
+    </div>
+
+    <div id="divisions-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <div style="flex:1"></div>
+      <button class="btn-ghost" id="divisions-modal-close">Close</button>
     </div>
   </div>
 </div>
@@ -614,6 +652,40 @@
     });
   }
 
+  let divisions = []; // [{name, sort_order}], fetched from /api/divisions
+  const demoDivisions = [
+    { name: 'No Division', sort_order: 0 },
+    { name: 'F1', sort_order: 1 },
+    { name: 'F2', sort_order: 2 },
+    { name: 'F3', sort_order: 3 },
+    { name: 'F4', sort_order: 4 },
+  ];
+
+  async function fetchDivisions() {
+    try {
+      const res = await fetch(`${API_BASE}/api/divisions`);
+      if (!res.ok) throw new Error('bad response');
+      divisions = await res.json();
+      if (divisions.length === 0) divisions = demoDivisions;
+    } catch (err) {
+      if (divisions.length === 0) divisions = demoDivisions;
+      console.warn('Using demo divisions — could not reach API:', err.message);
+    }
+    divisions.sort((a, b) => a.sort_order - b.sort_order);
+    populateDivisionSelect();
+  }
+
+  function populateDivisionSelect() {
+    const select = document.getElementById('f-division');
+    select.innerHTML = '';
+    divisions.forEach(d => {
+      const opt = document.createElement('option');
+      opt.value = d.name;
+      opt.textContent = d.name;
+      select.appendChild(opt);
+    });
+  }
+
   async function fetchDrivers() {
     try {
       const res = await fetch(`${API_BASE}/api/drivers`);
@@ -727,6 +799,7 @@
     link.textContent = adminKey ? 'Admin: On (click to log out)' : 'Admin';
     link.classList.toggle('active', !!adminKey);
     document.getElementById('manage-ranks-link').style.display = adminKey ? '' : 'none';
+    document.getElementById('manage-divisions-link').style.display = adminKey ? '' : 'none';
     renderRows();
   }
 
@@ -774,7 +847,15 @@
     document.getElementById('modal-title').textContent = `Edit ${driver.driver_name}`;
     document.getElementById('f-name').value = driver.driver_name || '';
     document.getElementById('f-nation').value = driver.nation || '';
-    document.getElementById('f-division').value = driver.division || '';
+    populateDivisionSelect();
+    const divisionSelect = document.getElementById('f-division');
+    if (driver.division && ![...divisionSelect.options].some(o => o.value === driver.division)) {
+      const opt = document.createElement('option');
+      opt.value = driver.division;
+      opt.textContent = `${driver.division} (not in managed list)`;
+      divisionSelect.appendChild(opt);
+    }
+    divisionSelect.value = driver.division || '';
     document.getElementById('f-license').value = ''; // default to auto unless they change it
     document.getElementById('f-points').value = driver.points;
     document.getElementById('modal-error').textContent = '';
@@ -832,20 +913,37 @@
   });
 
   // ---- MANAGE RANKS PANEL ----
-  document.getElementById('manage-ranks-link').addEventListener('click', (e) => {
+  let adminRanks = []; // full rank data including role_id, only ever fetched for admins
+
+  document.getElementById('manage-ranks-link').addEventListener('click', async (e) => {
     e.preventDefault();
-    renderRanksPanel();
     document.getElementById('ranks-error').textContent = '';
     document.getElementById('ranks-modal-overlay').style.display = 'flex';
+    await loadAdminRanksAndRender();
   });
 
   document.getElementById('ranks-modal-close').addEventListener('click', () => {
     document.getElementById('ranks-modal-overlay').style.display = 'none';
   });
 
+  async function loadAdminRanksAndRender() {
+    const errorEl = document.getElementById('ranks-error');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/ranks`, {
+        headers: { 'x-admin-key': adminKey },
+      });
+      if (!res.ok) throw new Error('Could not load ranks — check your admin key is still valid.');
+      adminRanks = await res.json();
+      errorEl.textContent = '';
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+    renderRanksPanel();
+  }
+
   function renderRanksPanel() {
     const list = document.getElementById('ranks-list');
-    const sorted = [...ranks].sort((a, b) => a.threshold - b.threshold);
+    const sorted = [...adminRanks].sort((a, b) => a.threshold - b.threshold);
     list.innerHTML = sorted.map(r => `
       <div class="rank-row" data-original-name="${escapeHtml(r.name)}">
         <input type="color" class="rank-color-input" value="${r.color || '#A855F7'}">
@@ -886,8 +984,8 @@
         body: JSON.stringify({ name, threshold, color, role_id: role_id || null, old_name: oldName, sort_order: threshold }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+      await loadAdminRanksAndRender();
       await fetchRanks();
-      renderRanksPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
@@ -906,8 +1004,8 @@
         body: JSON.stringify({ name }),
       });
       if (!res.ok) throw new Error('Delete failed');
+      await loadAdminRanksAndRender();
       await fetchRanks();
-      renderRanksPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
@@ -926,7 +1024,7 @@
       errorEl.textContent = 'Rank needs a name and a numeric threshold.';
       return;
     }
-    if (ranks.some(r => r.name === name)) {
+    if (adminRanks.some(r => r.name === name)) {
       errorEl.textContent = 'A rank with that name already exists.';
       return;
     }
@@ -941,8 +1039,115 @@
       document.getElementById('new-rank-name').value = '';
       document.getElementById('new-rank-threshold').value = '';
       document.getElementById('new-rank-role').value = '';
+      await loadAdminRanksAndRender();
       await fetchRanks();
-      renderRanksPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+
+  // ---- MANAGE DIVISIONS PANEL ----
+  document.getElementById('manage-divisions-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    renderDivisionsPanel();
+    document.getElementById('divisions-error').textContent = '';
+    document.getElementById('divisions-modal-overlay').style.display = 'flex';
+  });
+
+  document.getElementById('divisions-modal-close').addEventListener('click', () => {
+    document.getElementById('divisions-modal-overlay').style.display = 'none';
+  });
+
+  function renderDivisionsPanel() {
+    const list = document.getElementById('divisions-list');
+    const sorted = [...divisions].sort((a, b) => a.sort_order - b.sort_order);
+    list.innerHTML = sorted.map((d, i) => `
+      <div class="division-row" data-original-name="${escapeHtml(d.name)}">
+        <input type="text" class="division-name-input" value="${escapeHtml(d.name)}" placeholder="Division name">
+        <div class="rank-row-actions">
+          <button class="division-save-btn" title="Save changes">✓</button>
+          <button class="division-delete-btn" title="Delete division">✕</button>
+        </div>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.division-row').forEach((row, i) => {
+      row.querySelector('.division-save-btn').onclick = () => saveDivisionRow(row, i);
+      row.querySelector('.division-delete-btn').onclick = () => deleteDivisionRow(row);
+    });
+  }
+
+  async function saveDivisionRow(row, sortOrder) {
+    const errorEl = document.getElementById('divisions-error');
+    errorEl.textContent = '';
+    const oldName = row.dataset.originalName;
+    const name = row.querySelector('.division-name-input').value.trim();
+
+    if (!name) {
+      errorEl.textContent = 'Division needs a name.';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/divisions/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name, old_name: oldName, sort_order: sortOrder }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+      await fetchDivisions();
+      renderDivisionsPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  }
+
+  async function deleteDivisionRow(row) {
+    const name = row.dataset.originalName;
+    if (!confirm(`Delete the "${name}" division? Drivers currently on it will keep the label until their next edit.`)) return;
+
+    const errorEl = document.getElementById('divisions-error');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/divisions/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      await fetchDivisions();
+      renderDivisionsPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  }
+
+  document.getElementById('add-division-btn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('divisions-error');
+    errorEl.textContent = '';
+    const name = document.getElementById('new-division-name').value.trim();
+
+    if (!name) {
+      errorEl.textContent = 'Division needs a name.';
+      return;
+    }
+    if (divisions.some(d => d.name === name)) {
+      errorEl.textContent = 'A division with that name already exists.';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/divisions/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name, sort_order: divisions.length }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Add failed');
+      document.getElementById('new-division-name').value = '';
+      await fetchDivisions();
+      renderDivisionsPanel();
       renderRows();
     } catch (err) {
       errorEl.textContent = err.message;
@@ -951,8 +1156,10 @@
 
   updateAdminUI();
   fetchRanks().then(fetchDrivers);
+  fetchDivisions();
   setInterval(fetchDrivers, POLL_INTERVAL_MS);
   setInterval(fetchRanks, POLL_INTERVAL_MS * 4); // ranks change rarely, poll less often
+  setInterval(fetchDivisions, POLL_INTERVAL_MS * 4);
 </script>
 
 </body>
