@@ -241,9 +241,10 @@
   /* ---------- RANKS MANAGEMENT ---------- */
   .ranks-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; max-height: 320px; overflow-y: auto; }
   .rank-row {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; flex-direction: column; gap: 8px;
     background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
   }
+  .rank-row-top { display: flex; align-items: center; gap: 10px; }
   .rank-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
   .rank-row input[type="text"], .rank-row input[type="number"] {
     background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
@@ -433,6 +434,7 @@
         <input id="new-rank-color" type="color" value="#A855F7" title="Badge color">
         <input id="new-rank-role" type="text" placeholder="Discord role ID (optional)">
       </div>
+      <input id="new-rank-gif" type="text" placeholder="Rank-up GIF URL (optional)" style="width:100%;margin-top:8px;background:var(--bg-raised);border:1px solid var(--line);border-radius:6px;padding:8px 10px;color:var(--text);font-size:13px;font-family:inherit;">
       <button class="btn-primary" id="add-rank-btn" style="margin-top:10px">Add rank</button>
     </div>
 
@@ -946,14 +948,17 @@
     const sorted = [...adminRanks].sort((a, b) => a.threshold - b.threshold);
     list.innerHTML = sorted.map(r => `
       <div class="rank-row" data-original-name="${escapeHtml(r.name)}">
-        <input type="color" class="rank-color-input" value="${r.color || '#A855F7'}">
-        <input type="text" class="rank-name-input" value="${escapeHtml(r.name)}" placeholder="Rank name">
-        <input type="number" class="rank-threshold-input" value="${r.threshold}" placeholder="Threshold">
-        <input type="text" class="rank-role-input" value="${escapeHtml(r.role_id || '')}" placeholder="Role ID (optional)">
-        <div class="rank-row-actions">
-          <button class="rank-save-btn" title="Save changes">✓</button>
-          <button class="rank-delete-btn" title="Delete rank">✕</button>
+        <div class="rank-row-top">
+          <input type="color" class="rank-color-input" value="${r.color || '#A855F7'}">
+          <input type="text" class="rank-name-input" value="${escapeHtml(r.name)}" placeholder="Rank name">
+          <input type="number" class="rank-threshold-input" value="${r.threshold}" placeholder="Threshold">
+          <input type="text" class="rank-role-input" value="${escapeHtml(r.role_id || '')}" placeholder="Role ID (optional)">
+          <div class="rank-row-actions">
+            <button class="rank-save-btn" title="Save changes">✓</button>
+            <button class="rank-delete-btn" title="Delete rank">✕</button>
+          </div>
         </div>
+        <input type="text" class="rank-gif-input" value="${escapeHtml(r.gif_url || '')}" placeholder="Rank-up GIF URL (optional)" style="width:100%;background:var(--bg-card);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--text);font-size:12px;font-family:'JetBrains Mono',monospace;">
       </div>
     `).join('');
 
@@ -971,6 +976,7 @@
     const threshold = Number(row.querySelector('.rank-threshold-input').value);
     const color = row.querySelector('.rank-color-input').value;
     const role_id = row.querySelector('.rank-role-input').value.trim();
+    const gif_url = row.querySelector('.rank-gif-input').value.trim();
 
     if (!name || Number.isNaN(threshold)) {
       errorEl.textContent = 'Rank needs a name and a numeric threshold.';
@@ -981,7 +987,7 @@
       const res = await fetch(`${API_BASE}/api/admin/ranks/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, old_name: oldName, sort_order: threshold }),
+        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, gif_url: gif_url || null, old_name: oldName, sort_order: threshold }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
       await loadAdminRanksAndRender();
@@ -1019,6 +1025,7 @@
     const threshold = Number(document.getElementById('new-rank-threshold').value);
     const color = document.getElementById('new-rank-color').value;
     const role_id = document.getElementById('new-rank-role').value.trim();
+    const gif_url = document.getElementById('new-rank-gif').value.trim();
 
     if (!name || Number.isNaN(threshold)) {
       errorEl.textContent = 'Rank needs a name and a numeric threshold.';
@@ -1033,12 +1040,13 @@
       const res = await fetch(`${API_BASE}/api/admin/ranks/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
-        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, sort_order: threshold }),
+        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, gif_url: gif_url || null, sort_order: threshold }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Add failed');
       document.getElementById('new-rank-name').value = '';
       document.getElementById('new-rank-threshold').value = '';
       document.getElementById('new-rank-role').value = '';
+      document.getElementById('new-rank-gif').value = '';
       await loadAdminRanksAndRender();
       await fetchRanks();
       renderRows();
