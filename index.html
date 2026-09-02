@@ -149,6 +149,7 @@
   .license-badge.t2 { background: var(--tier-2); }
   .license-badge.t1 { background: var(--tier-1); color: #0A0C10; }
   .license-badge.t0 { background: var(--tier-0); color: #C7CDD6; }
+  /* Colors now come from the ranks table and are applied inline per-badge */
 
   .points {
     font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 15px;
@@ -236,6 +237,51 @@
   .btn-ghost:hover { color: var(--text); border-color: #3a4150; }
   #modal-delete { border-color: var(--accent-dim); color: var(--accent); }
   #modal-delete:hover { border-color: var(--accent); }
+
+  /* ---------- RANKS MANAGEMENT ---------- */
+  .ranks-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; max-height: 320px; overflow-y: auto; }
+  .rank-row {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px;
+  }
+  .rank-swatch { width: 16px; height: 16px; border-radius: 4px; flex-shrink: 0; }
+  .rank-row input[type="text"], .rank-row input[type="number"] {
+    background: var(--bg-card); border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 8px; color: var(--text); font-size: 13px; font-family: inherit; width: 100%;
+  }
+  .rank-row .rank-name-input { flex: 1.4; min-width: 0; }
+  .rank-row .rank-threshold-input { flex: 0.9; min-width: 0; }
+  .rank-row .rank-role-input { flex: 1.3; min-width: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  .rank-row input[type="color"] {
+    width: 30px; height: 30px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer; flex-shrink: 0;
+  }
+  .rank-row-actions { display: flex; gap: 6px; flex-shrink: 0; }
+  .rank-row-actions button {
+    background: none; border: 1px solid var(--line); color: var(--text-dim);
+    width: 28px; height: 28px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .rank-row-actions button:hover { color: var(--text); border-color: var(--accent); }
+  .rank-row-actions .rank-delete-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+  .rank-add-form {
+    border-top: 1px solid var(--line); padding-top: 16px;
+  }
+  .rank-add-title { font-size: 12px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .rank-form-grid {
+    display: grid; grid-template-columns: 1.4fr 0.9fr auto 1.3fr; gap: 8px;
+  }
+  .rank-form-grid input[type="text"], .rank-form-grid input[type="number"] {
+    background: var(--bg-raised); border: 1px solid var(--line); border-radius: 6px;
+    padding: 8px 10px; color: var(--text); font-size: 13px; font-family: inherit;
+  }
+  .rank-form-grid input[type="color"] {
+    width: 36px; height: 36px; border: 1px solid var(--line); border-radius: 6px; background: none; padding: 0; cursor: pointer;
+  }
+
+  @media (max-width: 640px) {
+    .rank-form-grid { grid-template-columns: 1fr 1fr; }
+    .rank-row { flex-wrap: wrap; }
+  }
 </style>
 </head>
 <body>
@@ -247,6 +293,7 @@
     <div class="nav-links">
       <a href="#rankings">Rankings</a>
       <a href="#" id="refresh-link">Refresh</a>
+      <a href="#" id="manage-ranks-link" style="display:none">Manage Ranks</a>
       <a href="#" id="admin-link">Admin</a>
     </div>
   </div>
@@ -323,11 +370,7 @@
       <label>License level</label>
       <select id="f-license">
         <option value="">Auto (based on points)</option>
-        <option value="No Rank">No Rank</option>
-        <option value="Rank I">Rank I</option>
-        <option value="Rank II">Rank II</option>
-        <option value="Rank III">Rank III</option>
-        <option value="Rank IV">Rank IV</option>
+        <!-- rank options injected dynamically -->
       </select>
     </div>
     <div class="field">
@@ -356,6 +399,30 @@
       <div style="flex:1"></div>
       <button class="btn-ghost" id="admin-login-cancel">Cancel</button>
       <button class="btn-primary" id="admin-login-submit">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<div id="ranks-modal-overlay" class="modal-overlay" style="display:none">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-title">Manage ranks</div>
+    <div id="ranks-list" class="ranks-list"><!-- existing ranks injected here --></div>
+
+    <div class="rank-add-form">
+      <div class="rank-add-title">Add a new rank</div>
+      <div class="rank-form-grid">
+        <input id="new-rank-name" type="text" placeholder="Rank name">
+        <input id="new-rank-threshold" type="number" placeholder="Points threshold">
+        <input id="new-rank-color" type="color" value="#A855F7" title="Badge color">
+        <input id="new-rank-role" type="text" placeholder="Discord role ID (optional)">
+      </div>
+      <button class="btn-primary" id="add-rank-btn" style="margin-top:10px">Add rank</button>
+    </div>
+
+    <div id="ranks-error" class="modal-error"></div>
+    <div class="modal-actions">
+      <div style="flex:1"></div>
+      <button class="btn-ghost" id="ranks-modal-close">Close</button>
     </div>
   </div>
 </div>
@@ -478,19 +545,37 @@
   const POLL_INTERVAL_MS = 30000;
 
   let drivers = [];
+  let ranks = []; // [{name, threshold, color, sort_order}], fetched from /api/ranks
   let previousPoints = {};
   let activeDivision = 'all';
   let searchTerm = '';
   let adminKey = localStorage.getItem('fes_admin_key') || null;
   let editingDriverId = null;
 
-  const licenseTierClass = (level) => {
-    if (level === 'Rank IV') return 't4';
-    if (level === 'Rank III') return 't3';
-    if (level === 'Rank II') return 't2';
-    if (level === 'Rank I') return 't1';
-    return 't0';
-  };
+  // Fallback palette used when a rank has no color set, cycled by sort order
+  const FALLBACK_PALETTE = ['#4A4162', '#8B7FE8', '#C58B4E', '#C7CDD6', '#E8C468', '#A855F7', '#6EE7A8', '#F472B6'];
+
+  function colorForRank(rankName) {
+    const idx = ranks.findIndex(r => r.name === rankName);
+    if (idx === -1) return '#4A4162';
+    const rank = ranks[idx];
+    return rank.color || FALLBACK_PALETTE[idx % FALLBACK_PALETTE.length];
+  }
+
+  function textColorForBg(hex) {
+    const c = hex.replace('#', '');
+    const r = parseInt(c.substring(0, 2), 16), g = parseInt(c.substring(2, 4), 16), b = parseInt(c.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance > 0.55 ? '#0A0C10' : '#ECE9F5';
+  }
+
+  const demoRanks = [
+    { name: 'No Rank', threshold: 0, color: '#4A4162', sort_order: 0 },
+    { name: 'Rank I', threshold: 75, color: '#8B7FE8', sort_order: 1 },
+    { name: 'Rank II', threshold: 300, color: '#C58B4E', sort_order: 2 },
+    { name: 'Rank III', threshold: 500, color: '#C7CDD6', sort_order: 3 },
+    { name: 'Rank IV', threshold: 750, color: '#E8C468', sort_order: 4 },
+  ];
 
   const demoData = [
     { discord_id: '1', driver_name: 'DGK Survival', nation: 'Australia', division: 'No Division', license_level: 'Rank IV', points: 1250 },
@@ -501,6 +586,33 @@
     { discord_id: '6', driver_name: 'Kuchenko', nation: 'Poland', division: 'No Division', license_level: 'Rank I', points: 250 },
     { discord_id: '7', driver_name: 'Aaron', nation: 'Spain', division: 'No Division', license_level: 'No Rank', points: 0 },
   ];
+
+  async function fetchRanks() {
+    try {
+      const res = await fetch(`${API_BASE}/api/ranks`);
+      if (!res.ok) throw new Error('bad response');
+      ranks = await res.json();
+      if (ranks.length === 0) ranks = demoRanks;
+    } catch (err) {
+      if (ranks.length === 0) ranks = demoRanks;
+      console.warn('Using demo ranks — could not reach API:', err.message);
+    }
+    ranks.sort((a, b) => a.threshold - b.threshold);
+    populateLicenseSelect();
+  }
+
+  function populateLicenseSelect() {
+    const select = document.getElementById('f-license');
+    const autoOption = select.querySelector('option[value=""]');
+    select.innerHTML = '';
+    select.appendChild(autoOption);
+    ranks.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.name;
+      opt.textContent = r.name;
+      select.appendChild(opt);
+    });
+  }
 
   async function fetchDrivers() {
     try {
@@ -568,7 +680,7 @@
     }
 
     tbody.innerHTML = filtered.map((d, i) => {
-      const tier = licenseTierClass(d.license_level);
+      const badgeColor = colorForRank(d.license_level);
       const changed = previousPoints[d.discord_id] !== undefined && previousPoints[d.discord_id] !== d.points;
       const editCell = adminKey
         ? `<td class="edit-col"><button class="edit-btn" data-id="${d.discord_id}" title="Edit driver">✎</button></td>`
@@ -579,7 +691,7 @@
           <td class="driver-name">${escapeHtml(d.driver_name)}</td>
           <td class="nation nation-col">${escapeHtml(d.nation || 'Unknown')}</td>
           <td><span class="division-tag">${escapeHtml(d.division || 'No Division')}</span></td>
-          <td><span class="license-badge ${tier}">${d.license_level}</span></td>
+          <td><span class="license-badge" style="background:${badgeColor};color:${textColorForBg(badgeColor)}">${escapeHtml(d.license_level)}</span></td>
           <td class="num-col points ${changed ? 'flash' : ''}">${d.points.toLocaleString()}</td>
           ${editCell}
         </tr>
@@ -614,6 +726,7 @@
     const link = document.getElementById('admin-link');
     link.textContent = adminKey ? 'Admin: On (click to log out)' : 'Admin';
     link.classList.toggle('active', !!adminKey);
+    document.getElementById('manage-ranks-link').style.display = adminKey ? '' : 'none';
     renderRows();
   }
 
@@ -718,9 +831,128 @@
     }
   });
 
+  // ---- MANAGE RANKS PANEL ----
+  document.getElementById('manage-ranks-link').addEventListener('click', (e) => {
+    e.preventDefault();
+    renderRanksPanel();
+    document.getElementById('ranks-error').textContent = '';
+    document.getElementById('ranks-modal-overlay').style.display = 'flex';
+  });
+
+  document.getElementById('ranks-modal-close').addEventListener('click', () => {
+    document.getElementById('ranks-modal-overlay').style.display = 'none';
+  });
+
+  function renderRanksPanel() {
+    const list = document.getElementById('ranks-list');
+    const sorted = [...ranks].sort((a, b) => a.threshold - b.threshold);
+    list.innerHTML = sorted.map(r => `
+      <div class="rank-row" data-original-name="${escapeHtml(r.name)}">
+        <input type="color" class="rank-color-input" value="${r.color || '#A855F7'}">
+        <input type="text" class="rank-name-input" value="${escapeHtml(r.name)}" placeholder="Rank name">
+        <input type="number" class="rank-threshold-input" value="${r.threshold}" placeholder="Threshold">
+        <input type="text" class="rank-role-input" value="${escapeHtml(r.role_id || '')}" placeholder="Role ID (optional)">
+        <div class="rank-row-actions">
+          <button class="rank-save-btn" title="Save changes">✓</button>
+          <button class="rank-delete-btn" title="Delete rank">✕</button>
+        </div>
+      </div>
+    `).join('');
+
+    list.querySelectorAll('.rank-row').forEach(row => {
+      row.querySelector('.rank-save-btn').onclick = () => saveRankRow(row);
+      row.querySelector('.rank-delete-btn').onclick = () => deleteRankRow(row);
+    });
+  }
+
+  async function saveRankRow(row) {
+    const errorEl = document.getElementById('ranks-error');
+    errorEl.textContent = '';
+    const oldName = row.dataset.originalName;
+    const name = row.querySelector('.rank-name-input').value.trim();
+    const threshold = Number(row.querySelector('.rank-threshold-input').value);
+    const color = row.querySelector('.rank-color-input').value;
+    const role_id = row.querySelector('.rank-role-input').value.trim();
+
+    if (!name || Number.isNaN(threshold)) {
+      errorEl.textContent = 'Rank needs a name and a numeric threshold.';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/ranks/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, old_name: oldName, sort_order: threshold }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Save failed');
+      await fetchRanks();
+      renderRanksPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  }
+
+  async function deleteRankRow(row) {
+    const name = row.dataset.originalName;
+    if (!confirm(`Delete the "${name}" rank? Drivers currently on it will keep the label until their next points update.`)) return;
+
+    const errorEl = document.getElementById('ranks-error');
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/ranks/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      await fetchRanks();
+      renderRanksPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  }
+
+  document.getElementById('add-rank-btn').addEventListener('click', async () => {
+    const errorEl = document.getElementById('ranks-error');
+    errorEl.textContent = '';
+    const name = document.getElementById('new-rank-name').value.trim();
+    const threshold = Number(document.getElementById('new-rank-threshold').value);
+    const color = document.getElementById('new-rank-color').value;
+    const role_id = document.getElementById('new-rank-role').value.trim();
+
+    if (!name || Number.isNaN(threshold)) {
+      errorEl.textContent = 'Rank needs a name and a numeric threshold.';
+      return;
+    }
+    if (ranks.some(r => r.name === name)) {
+      errorEl.textContent = 'A rank with that name already exists.';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API_BASE}/api/admin/ranks/update`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
+        body: JSON.stringify({ name, threshold, color, role_id: role_id || null, sort_order: threshold }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Add failed');
+      document.getElementById('new-rank-name').value = '';
+      document.getElementById('new-rank-threshold').value = '';
+      document.getElementById('new-rank-role').value = '';
+      await fetchRanks();
+      renderRanksPanel();
+      renderRows();
+    } catch (err) {
+      errorEl.textContent = err.message;
+    }
+  });
+
   updateAdminUI();
-  fetchDrivers();
+  fetchRanks().then(fetchDrivers);
   setInterval(fetchDrivers, POLL_INTERVAL_MS);
+  setInterval(fetchRanks, POLL_INTERVAL_MS * 4); // ranks change rarely, poll less often
 </script>
 
 </body>
