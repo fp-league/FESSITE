@@ -319,7 +319,6 @@
     <div class="nav-links">
       <a href="browse.html">Browse All</a>
       <a href="history.html">Points Log</a>
-      <a href="#rankings">Top Tier</a>
       <a href="#" id="refresh-link">Refresh</a>
       <a href="#" id="manage-ranks-link" style="display:none">Manage Ranks</a>
       <a href="#" id="manage-divisions-link" style="display:none">Manage Divisions</a>
@@ -924,10 +923,22 @@
     ["Yemen","YE"],
     ["Zambia","ZM"],
     ["Zimbabwe","ZW"],
-    ["Åland Islands","AX"]
+    ["Åland Islands","AX"],
+    ["Macedonia","MK"],
+    ["Moldova","MD"],
+    ["America","US"],
+    ["Palestine","PS"],
+    ["Scotland","GB-SCT"],
+    ["Wales","GB-WLS"]
   ];
 
+  const SPECIAL_FLAGS = {
+    'Scotland': "🏴󠁧󠁢󠁳󠁣󠁴󠁿",
+    'Wales': "🏴󠁧󠁢󠁷󠁬󠁳󠁿",
+  };
+
   function flagForCountry(name) {
+    if (SPECIAL_FLAGS[name]) return SPECIAL_FLAGS[name];
     const entry = COUNTRIES.find(c => c[0] === name);
     if (!entry) return '';
     const code = entry[1];
@@ -1018,10 +1029,25 @@
     return ranks.reduce((top, r) => (r.threshold > top.threshold ? r : top), ranks[0]).name;
   }
 
+  function updateHeroCopy(topRank) {
+    if (adminKey) {
+      document.getElementById('hero-eyebrow').textContent = 'Admin Mode';
+      document.getElementById('hero-title').innerHTML = 'Every driver.<br>Full access.';
+      document.getElementById('hero-sub').innerHTML = 'Admin mode shows and lets you edit every driver, not just the top rank.';
+      return;
+    }
+    if (!topRank) return;
+    document.getElementById('hero-eyebrow').textContent = `${topRank} Only`;
+    document.getElementById('hero-title').innerHTML = `${escapeHtml(topRank)}.<br>Right now.`;
+    document.getElementById('hero-sub').innerHTML =
+      `Only ${escapeHtml(topRank)} drivers show here. Looking for someone else? <a href="browse.html" style="color:var(--accent);text-decoration:underline;">Browse every driver</a>.`;
+  }
+
   function renderRows() {
     const tbody = document.getElementById('driver-rows');
     // Public view spotlights only the top rank; admins see everyone so editing still works for all drivers
     const topRank = topRankName();
+    updateHeroCopy(topRank);
     let filtered = adminKey ? [...drivers] : drivers.filter(d => d.license_level === topRank);
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
