@@ -1442,6 +1442,7 @@
     list.innerHTML = sorted.map(d => `
       <div class="division-row" data-original-name="${escapeHtml(d.name)}">
         <div class="division-row-top">
+          <input type="number" class="division-order-input" value="${d.sort_order}" title="Sort order (lower = higher priority)" style="width:48px;">
           <input type="color" class="division-color-input" value="${d.color || '#A855F7'}">
           <input type="text" class="division-icon-input" value="${escapeHtml(d.icon || '')}" placeholder="🏎️" maxlength="4">
           <input type="text" class="division-name-input" value="${escapeHtml(d.name)}" placeholder="Division name">
@@ -1454,13 +1455,13 @@
       </div>
     `).join('');
 
-    list.querySelectorAll('.division-row').forEach((row, i) => {
-      row.querySelector('.division-save-btn').onclick = () => saveDivisionRow(row, i);
+    list.querySelectorAll('.division-row').forEach((row) => {
+      row.querySelector('.division-save-btn').onclick = () => saveDivisionRow(row);
       row.querySelector('.division-delete-btn').onclick = () => deleteDivisionRow(row);
     });
   }
 
-  async function saveDivisionRow(row, sortOrder) {
+  async function saveDivisionRow(row) {
     const errorEl = document.getElementById('divisions-error');
     errorEl.textContent = '';
     const oldName = row.dataset.originalName;
@@ -1468,6 +1469,7 @@
     const color = row.querySelector('.division-color-input').value;
     const icon = row.querySelector('.division-icon-input').value.trim();
     const role_id = row.querySelector('.division-role-input').value.trim();
+    const sortOrder = Number(row.querySelector('.division-order-input').value) || 0;
 
     if (!name) {
       errorEl.textContent = 'Division needs a name.';
