@@ -370,6 +370,12 @@
       <!-- rows injected here -->
     </tbody>
   </table>
+
+  <div id="view-all-wrap" style="text-align:center; padding: 20px 0 60px;">
+    <a href="browse.html" class="page-btn" style="display:inline-block; text-decoration:none; background:var(--bg-raised); border:1px solid var(--line); color:var(--text); padding:12px 28px; border-radius:8px; font-size:14px;">
+      View all drivers →
+    </a>
+  </div>
 </div>
 
 <footer>
@@ -1024,31 +1030,25 @@
     document.getElementById('stat-top').textContent = top.toLocaleString();
   }
 
-  function topRankName() {
-    if (ranks.length === 0) return null;
-    return ranks.reduce((top, r) => (r.threshold > top.threshold ? r : top), ranks[0]).name;
-  }
+  const HOMEPAGE_LIMIT = 50;
 
-  function updateHeroCopy(topRank) {
+  function updateHeroCopy() {
     if (adminKey) {
       document.getElementById('hero-eyebrow').textContent = 'Admin Mode';
       document.getElementById('hero-title').innerHTML = 'Every driver.<br>Full access.';
-      document.getElementById('hero-sub').innerHTML = 'Admin mode shows and lets you edit every driver, not just the top rank.';
+      document.getElementById('hero-sub').innerHTML = 'Admin mode shows and lets you edit every driver, not just the top 50.';
       return;
     }
-    if (!topRank) return;
-    document.getElementById('hero-eyebrow').textContent = `${topRank} Only`;
-    document.getElementById('hero-title').innerHTML = `${escapeHtml(topRank)}.<br>Right now.`;
+    document.getElementById('hero-eyebrow').textContent = 'Top 50';
+    document.getElementById('hero-title').innerHTML = 'The leaderboard.<br>Right now.';
     document.getElementById('hero-sub').innerHTML =
-      `Only ${escapeHtml(topRank)} drivers show here. Looking for someone else? <a href="browse.html" style="color:var(--accent);text-decoration:underline;">Browse every driver</a>.`;
+      `FES's top 50 drivers, ranked live. Looking for someone else? <a href="browse.html" style="color:var(--accent);text-decoration:underline;">Browse every driver</a>.`;
   }
 
   function renderRows() {
     const tbody = document.getElementById('driver-rows');
-    // Public view spotlights only the top rank; admins see everyone so editing still works for all drivers
-    const topRank = topRankName();
-    updateHeroCopy(topRank);
-    let filtered = adminKey ? [...drivers] : drivers.filter(d => d.license_level === topRank);
+    updateHeroCopy();
+    let filtered = [...drivers];
     if (searchTerm) {
       const q = searchTerm.toLowerCase();
       filtered = filtered.filter(d =>
@@ -1069,8 +1069,13 @@
       return a.driver_name.localeCompare(b.driver_name);
     });
 
+    // Public view shows only the top 50; admins see and can edit everyone
+    if (!adminKey) filtered = filtered.slice(0, HOMEPAGE_LIMIT);
+
+    document.getElementById('view-all-wrap').style.display = adminKey ? 'none' : '';
+
     if (filtered.length === 0) {
-      const emptyMsg = adminKey ? 'No drivers match.' : `No ${topRank || 'top-tier'} drivers yet — check back after the next rank-up, or browse everyone.`;
+      const emptyMsg = adminKey ? 'No drivers match.' : 'No drivers registered yet.';
       tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state">${emptyMsg}</div></td></tr>`;
       return;
     }
